@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:boda_connect/core/models/booking_model.dart';
 import 'package:boda_connect/core/providers/booking_provider.dart';
 
@@ -35,6 +34,22 @@ void main() {
       final clearedState = state.copyWith(error: null);
 
       expect(clearedState.error, isNull);
+    });
+
+    test('should update success message', () {
+      const state = BookingState();
+      final updated = state.copyWith(successMessage: 'Reserva criada!');
+
+      expect(updated.successMessage, 'Reserva criada!');
+    });
+
+    test('should update current booking', () {
+      const state = BookingState();
+      final booking = _createBooking('test-1', BookingStatus.pending);
+      final updated = state.copyWith(currentBooking: booking);
+
+      expect(updated.currentBooking, isNotNull);
+      expect(updated.currentBooking?.id, 'test-1');
     });
   });
 
@@ -97,6 +112,33 @@ void main() {
 
       expect(confirmed.length, 2);
     });
+
+    test('should handle empty bookings list', () {
+      const state = BookingState();
+
+      expect(state.upcomingClientBookings, isEmpty);
+      expect(state.pastClientBookings, isEmpty);
+      expect(state.pendingSupplierBookings, isEmpty);
+      expect(state.confirmedSupplierBookings, isEmpty);
+    });
+
+    test('should filter inProgress bookings correctly', () {
+      final bookings = [
+        _createBooking('1', BookingStatus.pending),
+        _createBooking('2', BookingStatus.inProgress),
+        _createBooking('3', BookingStatus.confirmed),
+      ];
+
+      final state = BookingState(supplierBookings: bookings);
+
+      // inProgress should NOT be in pending
+      expect(state.pendingSupplierBookings.length, 1);
+      expect(state.pendingSupplierBookings.first.id, '1');
+
+      // inProgress should NOT be in confirmed
+      expect(state.confirmedSupplierBookings.length, 1);
+      expect(state.confirmedSupplierBookings.first.id, '3');
+    });
   });
 
   group('SupplierBookingsState Tests', () {
@@ -124,37 +166,139 @@ void main() {
       expect(newState.lastRefresh, now);
     });
 
-    test('shouldRefresh returns true when lastRefresh is null', () {
+    test('copyWith should clear error when set to null', () {
+      final state = SupplierBookingsState(
+        error: 'Some error',
+        isLoading: false,
+      );
+
+      final clearedState = state.copyWith(error: null);
+      expect(clearedState.error, isNull);
+    });
+
+    test('should update bookings list', () {
       const state = SupplierBookingsState();
-      expect(state.shouldRefresh, isTrue);
+      final bookings = [
+        _createBooking('1', BookingStatus.pending),
+        _createBooking('2', BookingStatus.confirmed),
+      ];
+
+      final updated = state.copyWith(bookings: bookings);
+      expect(updated.bookings.length, 2);
     });
 
-    test('shouldRefresh returns true after stale duration', () {
-      final staleTime = DateTime.now().subtract(const Duration(minutes: 10));
-      final state = SupplierBookingsState(lastRefresh: staleTime);
+    test('should track last refresh time', () {
+      final now = DateTime.now();
+      final state = SupplierBookingsState(lastRefresh: now);
 
-      expect(state.shouldRefresh, isTrue);
+      expect(state.lastRefresh, now);
+    });
+  });
+
+  group('BookingUIFlags Tests', () {
+    test('should create with defaults', () {
+      const flags = BookingUIFlags();
+
+      expect(flags.canAccept, isFalse);
+      expect(flags.canDecline, isFalse);
+      expect(flags.canComplete, isFalse);
+      expect(flags.canCancel, isFalse);
+      expect(flags.canMessage, isTrue);
+      expect(flags.canViewDetails, isTrue);
+      expect(flags.showExpiringSoon, isFalse);
+      expect(flags.showPaymentReceived, isFalse);
     });
 
-    test('shouldRefresh returns false when fresh', () {
-      final freshTime = DateTime.now().subtract(const Duration(seconds: 30));
-      final state = SupplierBookingsState(lastRefresh: freshTime);
+    test('should create from map', () {
+      final flags = BookingUIFlags.fromMap({
+        'canAccept': true,
+        'canDecline': true,
+        'canComplete': false,
+        'showExpiringSoon': true,
+      });
 
-      expect(state.shouldRefresh, isFalse);
+      expect(flags.canAccept, isTrue);
+      expect(flags.canDecline, isTrue);
+      expect(flags.canComplete, isFalse);
+      expect(flags.showExpiringSoon, isTrue);
+    });
+
+    test('should use defaults for missing map values', () {
+      final flags = BookingUIFlags.fromMap({});
+
+      expect(flags.canAccept, isFalse);
+      expect(flags.canMessage, isTrue);
+      expect(flags.canViewDetails, isTrue);
+    });
+  });
+
+  group('BookingStatus Tests', () {
+    test('should have all expected statuses', () {
+      expect(BookingStatus.values.length, 7);
+      expect(BookingStatus.values.contains(BookingStatus.pending), isTrue);
+      expect(BookingStatus.values.contains(BookingStatus.confirmed), isTrue);
+      expect(BookingStatus.values.contains(BookingStatus.inProgress), isTrue);
+      expect(BookingStatus.values.contains(BookingStatus.completed), isTrue);
+      expect(BookingStatus.values.contains(BookingStatus.cancelled), isTrue);
+      expect(BookingStatus.values.contains(BookingStatus.disputed), isTrue);
+      expect(BookingStatus.values.contains(BookingStatus.refunded), isTrue);
+    });
+  });
+
+  group('ContactVisibility Tests', () {
+    test('should create with defaults', () {
+      const visibility = ContactVisibility();
+
+      expect(visibility.canSeePhone, isFalse);
+      expect(visibility.canSeeWhatsapp, isFalse);
+      expect(visibility.canSeeEmail, isFalse);
+      expect(visibility.hasActiveBooking, isFalse);
+      expect(visibility.canSeeAnyContact, isFalse);
+    });
+
+    test('canSeeAnyContact should return true when any contact visible', () {
+      const visibility = ContactVisibility(canSeePhone: true);
+
+      expect(visibility.canSeeAnyContact, isTrue);
+    });
+
+    test('should show message when no active booking', () {
+      const visibility = ContactVisibility(
+        hasActiveBooking: false,
+        message: 'Informações de contacto disponíveis após reserva confirmada',
+      );
+
+      expect(visibility.message, isNotNull);
+      expect(visibility.message, contains('reserva confirmada'));
+    });
+
+    test('should allow all contacts with active booking', () {
+      const visibility = ContactVisibility(
+        canSeePhone: true,
+        canSeeWhatsapp: true,
+        canSeeEmail: true,
+        hasActiveBooking: true,
+      );
+
+      expect(visibility.canSeeAnyContact, isTrue);
+      expect(visibility.hasActiveBooking, isTrue);
     });
   });
 }
 
-/// Helper to create test booking
+/// Helper to create test booking with all required fields
 BookingModel _createBooking(String id, BookingStatus status) {
+  final now = DateTime.now();
   return BookingModel(
     id: id,
     clientId: 'client-1',
     supplierId: 'supplier-1',
     packageId: 'package-1',
+    eventName: 'Test Event',
     status: status,
     totalPrice: 100000,
-    eventDate: DateTime.now().add(const Duration(days: 30)),
-    createdAt: DateTime.now(),
+    eventDate: now.add(const Duration(days: 30)),
+    createdAt: now,
+    updatedAt: now,
   );
 }

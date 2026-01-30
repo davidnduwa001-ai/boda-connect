@@ -1,93 +1,137 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:boda_connect/core/providers/settings_provider.dart';
 
 /// SettingsProvider Tests
-/// Tests for AppSettings state and notifier
+/// Tests for AppSettingsState and enums
 void main() {
-  group('AppSettings Tests', () {
-    test('should create with default values', () {
-      const settings = AppSettings();
+  group('FontSizeOption Tests', () {
+    test('should have correct labels and scales', () {
+      expect(FontSizeOption.small.label, 'Pequeno');
+      expect(FontSizeOption.small.scale, 0.85);
 
+      expect(FontSizeOption.medium.label, 'Médio');
+      expect(FontSizeOption.medium.scale, 1.0);
+
+      expect(FontSizeOption.large.label, 'Grande');
+      expect(FontSizeOption.large.scale, 1.15);
+
+      expect(FontSizeOption.extraLarge.label, 'Muito Grande');
+      expect(FontSizeOption.extraLarge.scale, 1.3);
+    });
+
+    test('fromLabel should return correct option', () {
+      expect(FontSizeOption.fromLabel('Pequeno'), FontSizeOption.small);
+      expect(FontSizeOption.fromLabel('Médio'), FontSizeOption.medium);
+      expect(FontSizeOption.fromLabel('Grande'), FontSizeOption.large);
+      expect(FontSizeOption.fromLabel('Muito Grande'), FontSizeOption.extraLarge);
+    });
+
+    test('fromLabel should return medium for unknown label', () {
+      expect(FontSizeOption.fromLabel('Unknown'), FontSizeOption.medium);
+      expect(FontSizeOption.fromLabel(''), FontSizeOption.medium);
+    });
+  });
+
+  group('ThemeModeOption Tests', () {
+    test('should have correct labels and modes', () {
+      expect(ThemeModeOption.light.label, 'Claro');
+      expect(ThemeModeOption.light.mode, ThemeMode.light);
+
+      expect(ThemeModeOption.dark.label, 'Escuro');
+      expect(ThemeModeOption.dark.mode, ThemeMode.dark);
+
+      expect(ThemeModeOption.system.label, 'Automático');
+      expect(ThemeModeOption.system.mode, ThemeMode.system);
+    });
+
+    test('fromLabel should return correct option', () {
+      expect(ThemeModeOption.fromLabel('Claro'), ThemeModeOption.light);
+      expect(ThemeModeOption.fromLabel('Escuro'), ThemeModeOption.dark);
+      expect(ThemeModeOption.fromLabel('Automático'), ThemeModeOption.system);
+    });
+
+    test('fromLabel should return light for unknown label', () {
+      expect(ThemeModeOption.fromLabel('Unknown'), ThemeModeOption.light);
+    });
+  });
+
+  group('AppSettingsState Tests', () {
+    test('should create with default values', () {
+      const settings = AppSettingsState();
+
+      expect(settings.fontSize, FontSizeOption.medium);
+      expect(settings.themeMode, ThemeModeOption.light);
       expect(settings.language, 'Português');
       expect(settings.region, 'Luanda');
       expect(settings.notificationsEnabled, isTrue);
-      expect(settings.darkModeEnabled, isFalse);
-      expect(settings.soundEnabled, isTrue);
-      expect(settings.vibrationEnabled, isTrue);
+      expect(settings.pushNotifications, isTrue);
+      expect(settings.emailNotifications, isTrue);
+      expect(settings.smsNotifications, isFalse);
+      expect(settings.marketingEmails, isFalse);
+      expect(settings.autoPlayVideos, isTrue);
+      expect(settings.dataSaver, isFalse);
     });
 
     test('should create with custom values', () {
-      const settings = AppSettings(
+      const settings = AppSettingsState(
+        fontSize: FontSizeOption.large,
+        themeMode: ThemeModeOption.dark,
         language: 'English',
         region: 'Benguela',
         notificationsEnabled: false,
-        darkModeEnabled: true,
-        soundEnabled: false,
-        vibrationEnabled: false,
+        pushNotifications: false,
+        dataSaver: true,
       );
 
+      expect(settings.fontSize, FontSizeOption.large);
+      expect(settings.themeMode, ThemeModeOption.dark);
       expect(settings.language, 'English');
       expect(settings.region, 'Benguela');
       expect(settings.notificationsEnabled, isFalse);
-      expect(settings.darkModeEnabled, isTrue);
-      expect(settings.soundEnabled, isFalse);
-      expect(settings.vibrationEnabled, isFalse);
+      expect(settings.pushNotifications, isFalse);
+      expect(settings.dataSaver, isTrue);
     });
 
     test('copyWith should preserve values when not specified', () {
-      const settings = AppSettings(
+      const settings = AppSettingsState(
         language: 'English',
         region: 'Huambo',
         notificationsEnabled: false,
       );
 
-      final updated = settings.copyWith(darkModeEnabled: true);
+      final updated = settings.copyWith(dataSaver: true);
 
       expect(updated.language, 'English');
       expect(updated.region, 'Huambo');
       expect(updated.notificationsEnabled, isFalse);
-      expect(updated.darkModeEnabled, isTrue);
+      expect(updated.dataSaver, isTrue);
     });
 
     test('copyWith should update specified values', () {
-      const settings = AppSettings();
+      const settings = AppSettingsState();
 
       final updated = settings.copyWith(
         language: 'English',
         region: 'Cabinda',
+        fontSize: FontSizeOption.large,
       );
 
       expect(updated.language, 'English');
       expect(updated.region, 'Cabinda');
+      expect(updated.fontSize, FontSizeOption.large);
       expect(updated.notificationsEnabled, isTrue); // Default preserved
-    });
-  });
-
-  group('AppSettings Equality Tests', () {
-    test('settings with same values should be equal', () {
-      const settings1 = AppSettings(
-        language: 'Português',
-        region: 'Luanda',
-      );
-      const settings2 = AppSettings(
-        language: 'Português',
-        region: 'Luanda',
-      );
-
-      // If Equatable is used
-      expect(settings1.language, settings2.language);
-      expect(settings1.region, settings2.region);
     });
   });
 
   group('Language Settings Tests', () {
     test('should support Portuguese', () {
-      const settings = AppSettings(language: 'Português');
+      const settings = AppSettingsState(language: 'Português');
       expect(settings.language, 'Português');
     });
 
     test('should support English', () {
-      const settings = AppSettings(language: 'English');
+      const settings = AppSettingsState(language: 'English');
       expect(settings.language, 'English');
     });
   });
@@ -104,7 +148,7 @@ void main() {
       ];
 
       for (final region in regions) {
-        final settings = AppSettings(region: region);
+        final settings = AppSettingsState(region: region);
         expect(settings.region, region);
       }
     });
@@ -112,55 +156,31 @@ void main() {
 
   group('Notification Settings Tests', () {
     test('notifications enabled by default', () {
-      const settings = AppSettings();
+      const settings = AppSettingsState();
       expect(settings.notificationsEnabled, isTrue);
+      expect(settings.pushNotifications, isTrue);
+      expect(settings.emailNotifications, isTrue);
     });
 
     test('should toggle notifications', () {
-      const settings = AppSettings(notificationsEnabled: true);
+      const settings = AppSettingsState(notificationsEnabled: true);
       final disabled = settings.copyWith(notificationsEnabled: false);
 
       expect(disabled.notificationsEnabled, isFalse);
     });
   });
 
-  group('Sound and Vibration Tests', () {
-    test('sound enabled by default', () {
-      const settings = AppSettings();
-      expect(settings.soundEnabled, isTrue);
+  group('Data Saver Tests', () {
+    test('data saver disabled by default', () {
+      const settings = AppSettingsState();
+      expect(settings.dataSaver, isFalse);
     });
 
-    test('vibration enabled by default', () {
-      const settings = AppSettings();
-      expect(settings.vibrationEnabled, isTrue);
-    });
+    test('should toggle data saver', () {
+      const settings = AppSettingsState(dataSaver: false);
+      final enabled = settings.copyWith(dataSaver: true);
 
-    test('should toggle sound', () {
-      const settings = AppSettings(soundEnabled: true);
-      final disabled = settings.copyWith(soundEnabled: false);
-
-      expect(disabled.soundEnabled, isFalse);
-    });
-
-    test('should toggle vibration', () {
-      const settings = AppSettings(vibrationEnabled: true);
-      final disabled = settings.copyWith(vibrationEnabled: false);
-
-      expect(disabled.vibrationEnabled, isFalse);
-    });
-  });
-
-  group('Dark Mode Tests', () {
-    test('dark mode disabled by default', () {
-      const settings = AppSettings();
-      expect(settings.darkModeEnabled, isFalse);
-    });
-
-    test('should toggle dark mode', () {
-      const settings = AppSettings(darkModeEnabled: false);
-      final enabled = settings.copyWith(darkModeEnabled: true);
-
-      expect(enabled.darkModeEnabled, isTrue);
+      expect(enabled.dataSaver, isTrue);
     });
   });
 }
