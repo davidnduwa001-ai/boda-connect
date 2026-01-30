@@ -499,7 +499,7 @@ export const createBooking = functions
                 guestCount: data.guestCount || null,
                 notes: data.notes || null,
                 status: "pending",
-                totalAmount: packageData.price || 0,
+                totalPrice: packageData.price || 0, // Use totalPrice for consistency
                 paidAmount: 0,
                 platformFee: 0,
                 supplierEarnings: 0,

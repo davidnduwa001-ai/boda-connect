@@ -151,7 +151,8 @@ function sanitizeBookingForSupplier(
 ): SupplierBooking {
   const data = doc.data()!;
   const status = data.status || "pending";
-  const totalPrice = data.totalPrice || 0;
+  // Support both totalPrice and totalAmount for backwards compatibility
+  const totalPrice = data.totalPrice || data.totalAmount || 0;
   const paidAmount = data.paidAmount || 0;
 
   return {

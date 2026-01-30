@@ -197,7 +197,8 @@ function buildClientBookingSummary(
     eventName: booking.eventName || "Evento",
     eventDate: booking.eventDate || admin.firestore.Timestamp.now(),
     status,
-    totalAmount: booking.totalAmount || booking.price || 0,
+    // Support both totalPrice (new) and totalAmount (legacy) for backwards compatibility
+    totalAmount: booking.totalPrice || booking.totalAmount || booking.price || 0,
     currency: booking.currency || "AOA",
     uiFlags: buildClientUIFlags(status, booking),
     createdAt: booking.createdAt || admin.firestore.Timestamp.now(),
@@ -213,7 +214,8 @@ function buildClientUIFlags(
 ): ClientBookingUIFlags {
   const paymentStatus = booking.paymentStatus || "pending";
   const paidAmount = booking.paidAmount || 0;
-  const totalPrice = booking.totalPrice || 0;
+  // Support both totalPrice (new) and totalAmount (legacy) for backwards compatibility
+  const totalPrice = booking.totalPrice || booking.totalAmount || 0;
   const isUnpaid = paidAmount === 0;
   const isPartiallyPaid = paidAmount > 0 && paidAmount < totalPrice;
 
@@ -461,7 +463,8 @@ function buildSupplierBookingSummary(
     eventDate: booking.eventDate || admin.firestore.Timestamp.now(),
     eventLocation: booking.eventLocation || booking.location || null,
     status,
-    totalAmount: booking.totalAmount || booking.price || 0,
+    // Support both totalPrice (new) and totalAmount (legacy) for backwards compatibility
+    totalAmount: booking.totalPrice || booking.totalAmount || booking.price || 0,
     currency: booking.currency || "AOA",
     uiFlags: buildSupplierUIFlags(status, booking, expiresAt),
     createdAt: booking.createdAt || admin.firestore.Timestamp.now(),
