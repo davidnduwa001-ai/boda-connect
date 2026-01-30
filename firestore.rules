@@ -23,25 +23,18 @@ service cloud.firestore {
     }
 
     // ==================== ADMIN HELPER ====================
-    // PHASE 0 FIX: Admin check now uses custom claims ONLY
-    // No longer trusts mutable Firestore fields
+    // SECURITY: Admin check uses custom claims ONLY
+    // Custom claims must be set via Firebase Admin SDK
+    // Legacy Firestore-based admin checks have been removed for security
     function isAdmin() {
       return request.auth != null &&
         request.auth.token.admin == true;
     }
 
-    // Legacy admin check for backward compatibility during migration
-    // TODO: Remove after all admins have custom claims set
-    function isAdminLegacy() {
-      return request.auth != null &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'app_admin');
-    }
-
-    // Combined admin check - prefers claims, falls back to legacy
+    // Alias for backwards compatibility with existing rules
+    // All admin checks now use custom claims only
     function isAdminCombined() {
-      return isAdmin() || isAdminLegacy();
+      return isAdmin();
     }
 
     // Users collection - users can read/write their own data

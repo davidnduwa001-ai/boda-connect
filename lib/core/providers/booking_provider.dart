@@ -246,14 +246,17 @@ class BookingNotifier extends StateNotifier<BookingState> {
 
       debugPrint('✅ Booking $bookingId confirmed via Cloud Function');
 
-      // Get the booking to find supplierId
-      final booking = state.supplierBookings.firstWhere(
-        (b) => b.id == bookingId,
-        orElse: () => state.clientBookings.firstWhere((b) => b.id == bookingId),
+      // Get the booking to find supplierId (null-safe lookup)
+      final booking = state.supplierBookings.cast<BookingModel?>().firstWhere(
+        (b) => b?.id == bookingId,
+        orElse: () => state.clientBookings.cast<BookingModel?>().firstWhere(
+          (b) => b?.id == bookingId,
+          orElse: () => null,
+        ),
       );
 
       // Update supplier stats for confirmed booking
-      if (booking.supplierId.isNotEmpty) {
+      if (booking != null && booking.supplierId.isNotEmpty) {
         _ref.read(bookingStatsUpdateProvider).onBookingConfirmed(booking.supplierId);
       }
 
@@ -360,14 +363,17 @@ class BookingNotifier extends StateNotifier<BookingState> {
 
       debugPrint('✅ Booking $bookingId completed via Cloud Function');
 
-      // Get the booking to find supplierId
-      final booking = state.supplierBookings.firstWhere(
-        (b) => b.id == bookingId,
-        orElse: () => state.clientBookings.firstWhere((b) => b.id == bookingId),
+      // Get the booking to find supplierId (null-safe lookup)
+      final booking = state.supplierBookings.cast<BookingModel?>().firstWhere(
+        (b) => b?.id == bookingId,
+        orElse: () => state.clientBookings.cast<BookingModel?>().firstWhere(
+          (b) => b?.id == bookingId,
+          orElse: () => null,
+        ),
       );
 
       // Update supplier stats for completed booking
-      if (booking.supplierId.isNotEmpty) {
+      if (booking != null && booking.supplierId.isNotEmpty) {
         _ref.read(bookingStatsUpdateProvider).onBookingCompleted(booking.supplierId);
       }
 

@@ -147,7 +147,12 @@ class BookingRepository {
 
   // ==================== REVIEWS ====================
 
-  /// Create review for completed booking
+  /// Create review for completed booking via Cloud Function
+  ///
+  /// Uses server-side validation to prevent race conditions:
+  /// - Booking completion check is done atomically
+  /// - Duplicate review check uses transaction
+  /// - Supplier stats update is atomic
   Future<String> createReview({
     required String bookingId,
     required String clientId,
@@ -157,39 +162,47 @@ class BookingRepository {
     List<String>? photos,
     String? clientName,
     String? clientPhoto,
+    List<String>? tags,
   }) async {
-    // Verify booking is completed
-    final booking = await getBooking(bookingId);
-    if (booking == null || booking.status != BookingStatus.completed) {
-      throw Exception('Só pode avaliar reservas concluídas');
+    try {
+      // Use Cloud Function for atomic review creation
+      // This prevents race conditions and ensures data integrity
+      final callable = _functions.httpsCallable('createReview');
+
+      final result = await callable.call<Map<String, dynamic>>({
+        'bookingId': bookingId,
+        'rating': rating,
+        'comment': comment,
+        'tags': tags ?? [],
+      });
+
+      final data = result.data;
+      if (data['success'] != true) {
+        throw Exception(data['error'] ?? 'Erro ao criar avaliação');
+      }
+
+      final reviewId = data['reviewId'] as String;
+      debugPrint('✅ Review created via Cloud Function: $reviewId');
+
+      return reviewId;
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('❌ Cloud Function error: ${e.code} - ${e.message}');
+
+      // Map error codes to user-friendly messages
+      switch (e.code) {
+        case 'failed-precondition':
+          throw Exception(e.message ?? 'Reserva não pode ser avaliada');
+        case 'already-exists':
+          throw Exception('Já avaliou esta reserva');
+        case 'unauthenticated':
+          throw Exception('Faça login para avaliar');
+        default:
+          throw Exception(e.message ?? 'Erro ao criar avaliação');
+      }
+    } catch (e) {
+      debugPrint('❌ Review creation error: $e');
+      rethrow;
     }
-
-    // Check if review already exists
-    final existingReviews = await _firestoreService.reviews
-        .where('bookingId', isEqualTo: bookingId)
-        .get();
-    
-    if (existingReviews.docs.isNotEmpty) {
-      throw Exception('Já avaliou esta reserva');
-    }
-
-    final now = DateTime.now();
-    final review = ReviewModel(
-      id: '',
-      bookingId: bookingId,
-      clientId: clientId,
-      supplierId: supplierId,
-      clientName: clientName,
-      clientPhoto: clientPhoto,
-      rating: rating,
-      comment: comment,
-      photos: photos ?? [],
-      isVerified: true, // Verified because booking exists
-      createdAt: now,
-      updatedAt: now,
-    );
-
-    return await _firestoreService.createReview(review);
   }
 
   // ==================== BOOKING QUERIES ====================

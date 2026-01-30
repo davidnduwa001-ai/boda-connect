@@ -48,6 +48,34 @@ class _SupplierPricingAvailabilityScreenState
     });
   }
 
+  /// Notify admins about new supplier registration
+  Future<void> _notifyAdminsNewSupplier({
+    required String supplierId,
+    required String businessName,
+    required String category,
+  }) async {
+    // Create admin notification in Firestore
+    await FirebaseFirestore.instance.collection('admin_notifications').add({
+      'type': 'new_supplier_registration',
+      'supplierId': supplierId,
+      'businessName': businessName,
+      'category': category,
+      'message': 'Novo fornecedor aguardando aprovação: $businessName ($category)',
+      'isRead': false,
+      'priority': 'high',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    // Also add to onboarding queue for admin dashboard
+    await FirebaseFirestore.instance.collection('onboarding_queue').doc(supplierId).set({
+      'supplierId': supplierId,
+      'businessName': businessName,
+      'category': category,
+      'status': 'pending',
+      'submittedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<void> _finalizeRegistration() async {
     setState(() => _isSaving = true);
 
@@ -167,6 +195,19 @@ class _SupplierPricingAvailabilityScreenState
 
       debugPrint('✅ Supplier registration finalized with PENDING_REVIEW status');
       debugPrint('📸 Photos saved: ${photoUrls.length}');
+
+      // Notify admins about new supplier registration
+      try {
+        await _notifyAdminsNewSupplier(
+          supplierId: supplierId,
+          businessName: registrationData.businessName ?? 'Novo Fornecedor',
+          category: registrationData.serviceType ?? 'Não especificado',
+        );
+        debugPrint('📢 Admin notification sent for new supplier');
+      } catch (e) {
+        // Don't fail registration if notification fails
+        debugPrint('⚠️ Failed to notify admins: $e');
+      }
 
       // Clear registration data
       ref.read(supplierRegistrationProvider.notifier).reset();
