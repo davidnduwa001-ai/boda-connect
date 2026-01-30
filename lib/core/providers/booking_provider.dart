@@ -284,7 +284,7 @@ class BookingNotifier extends StateNotifier<BookingState> {
 
       return true;
     } catch (e) {
-      debugPrint('❌ Error confirming booking: $e');
+      Log.fail('Error confirming booking: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Erro ao confirmar reserva: ${e.toString()}',
@@ -312,7 +312,7 @@ class BookingNotifier extends StateNotifier<BookingState> {
         throw Exception(response['error'] ?? 'Failed to start booking');
       }
 
-      debugPrint('✅ Booking $bookingId started via Cloud Function');
+      Log.success('Booking $bookingId started via Cloud Function');
 
       // Update local state
       final updatedBookings = state.supplierBookings.map((b) {
@@ -333,7 +333,7 @@ class BookingNotifier extends StateNotifier<BookingState> {
 
       return true;
     } catch (e) {
-      debugPrint('❌ Error starting booking: $e');
+      Log.fail('Error starting booking: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Erro ao iniciar serviço: ${e.toString()}',
@@ -396,7 +396,7 @@ class BookingNotifier extends StateNotifier<BookingState> {
 
       return true;
     } catch (e) {
-      debugPrint('❌ Error completing booking: $e');
+      Log.fail('Error completing booking: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Erro ao concluir serviço: ${e.toString()}',
@@ -427,7 +427,7 @@ class BookingNotifier extends StateNotifier<BookingState> {
         throw Exception(response['error'] ?? 'Failed to reject booking');
       }
 
-      debugPrint('✅ Booking $bookingId rejected via Cloud Function');
+      Log.success('Booking $bookingId rejected via Cloud Function');
 
       // Update local state
       final updatedBookings = state.supplierBookings.map((b) {
@@ -450,7 +450,7 @@ class BookingNotifier extends StateNotifier<BookingState> {
 
       return true;
     } catch (e) {
-      debugPrint('❌ Error rejecting booking: $e');
+      Log.fail('Error rejecting booking: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Erro ao rejeitar pedido: ${e.toString()}',
@@ -654,9 +654,9 @@ class SupplierBookingsNotifier extends StateNotifier<SupplierBookingsState> {
         lastRefresh: DateTime.now(),
       );
 
-      debugPrint('📋 Loaded ${bookings.length} supplier bookings via Cloud Function');
+      Log.d('Loaded ${bookings.length} supplier bookings via Cloud Function');
     } catch (e) {
-      debugPrint('❌ Error loading supplier bookings: $e');
+      Log.fail('Error loading supplier bookings: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Erro ao carregar reservas',
@@ -685,7 +685,7 @@ class SupplierBookingsNotifier extends StateNotifier<SupplierBookingsState> {
       await loadBookings();
       return true;
     } catch (e) {
-      debugPrint('❌ Error responding to booking: $e');
+      Log.fail('Error responding to booking: $e');
       return false;
     }
   }
@@ -707,7 +707,7 @@ class SupplierBookingsNotifier extends StateNotifier<SupplierBookingsState> {
 
       return BookingModel.fromCloudFunction(data['booking'] as Map<String, dynamic>);
     } catch (e) {
-      debugPrint('❌ Error getting booking details: $e');
+      Log.fail('Error getting booking details: $e');
       return null;
     }
   }
