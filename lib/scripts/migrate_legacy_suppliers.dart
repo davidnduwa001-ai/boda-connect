@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+import '../core/services/logger_service.dart';
 
 /// Migration script for legacy supplier documents
 ///
@@ -17,7 +17,7 @@ class LegacySupplierMigration {
   /// Run the migration
   /// Returns a MigrationResult with statistics
   Future<MigrationResult> migrate({bool dryRun = false}) async {
-    debugPrint('🔄 Starting legacy supplier migration (dryRun: $dryRun)...');
+    Log.i('Starting legacy supplier migration (dryRun: $dryRun)...');
 
     int totalSuppliers = 0;
     int migratedSuppliers = 0;
@@ -48,32 +48,27 @@ class LegacySupplierMigration {
 
             if (updates.isEmpty) {
               skippedSuppliers++;
-              debugPrint('  ⏭️ ${doc.id}: Already migrated');
+              Log.d('${doc.id}: Already migrated');
               continue;
             }
 
             if (dryRun) {
-              debugPrint('  📝 ${doc.id}: Would update: ${updates.keys.join(', ')}');
+              Log.d('${doc.id}: Would update: ${updates.keys.join(', ')}');
               migratedSuppliers++;
             } else {
               await doc.reference.update(updates);
-              debugPrint('  ✅ ${doc.id}: Updated: ${updates.keys.join(', ')}');
+              Log.success('${doc.id}: Updated: ${updates.keys.join(', ')}');
               migratedSuppliers++;
             }
           } catch (e) {
             errorCount++;
             errors.add('${doc.id}: $e');
-            debugPrint('  ❌ ${doc.id}: Error - $e');
+            Log.fail('${doc.id}: Error - $e');
           }
         }
       } while (lastSnapshot.docs.length == batchSize);
 
-      debugPrint('');
-      debugPrint('🏁 Migration complete:');
-      debugPrint('   Total suppliers: $totalSuppliers');
-      debugPrint('   Migrated: $migratedSuppliers');
-      debugPrint('   Skipped (already migrated): $skippedSuppliers');
-      debugPrint('   Errors: $errorCount');
+      Log.i('Migration complete: total=$totalSuppliers, migrated=$migratedSuppliers, skipped=$skippedSuppliers, errors=$errorCount');
 
       return MigrationResult(
         totalSuppliers: totalSuppliers,
@@ -84,7 +79,7 @@ class LegacySupplierMigration {
         dryRun: dryRun,
       );
     } catch (e) {
-      debugPrint('❌ Migration failed: $e');
+      Log.fail('Migration failed: $e');
       rethrow;
     }
   }
@@ -135,7 +130,7 @@ class LegacySupplierMigration {
 
   /// Verify migration was successful
   Future<MigrationVerification> verify() async {
-    debugPrint('🔍 Verifying migration...');
+    Log.i('Verifying migration...');
 
     int totalSuppliers = 0;
     int withAccountStatus = 0;
@@ -182,14 +177,7 @@ class LegacySupplierMigration {
       }
     } while (lastSnapshot.docs.length == batchSize);
 
-    debugPrint('');
-    debugPrint('📊 Verification Results:');
-    debugPrint('   Total suppliers: $totalSuppliers');
-    debugPrint('   With accountStatus: $withAccountStatus');
-    debugPrint('   With identityVerificationStatus: $withIdentityStatus');
-    debugPrint('   With acceptingBookings: $withAcceptingBookings');
-    debugPrint('   Active with isActive=true: $activeWithIsActive');
-    debugPrint('   Mismatches (active but not isActive): $mismatches');
+    Log.i('Verification: total=$totalSuppliers, withAccountStatus=$withAccountStatus, withIdentityStatus=$withIdentityStatus, withAcceptingBookings=$withAcceptingBookings, activeWithIsActive=$activeWithIsActive, mismatches=$mismatches');
 
     return MigrationVerification(
       totalSuppliers: totalSuppliers,
@@ -204,7 +192,7 @@ class LegacySupplierMigration {
 
   /// Fix any remaining mismatches (accountStatus=active but isActive=false)
   Future<int> fixMismatches() async {
-    debugPrint('🔧 Fixing accountStatus/isActive mismatches...');
+    Log.i('Fixing accountStatus/isActive mismatches...');
 
     int fixed = 0;
 
@@ -221,11 +209,11 @@ class LegacySupplierMigration {
           '_mismatchFixedAt': FieldValue.serverTimestamp(),
         });
         fixed++;
-        debugPrint('  ✅ Fixed: ${doc.id}');
+        Log.success('Fixed: ${doc.id}');
       }
     }
 
-    debugPrint('🏁 Fixed $fixed mismatches');
+    Log.i('Fixed $fixed mismatches');
     return fixed;
   }
 }

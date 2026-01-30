@@ -1,4 +1,5 @@
 import 'package:boda_connect/app.dart';
+import 'package:boda_connect/core/services/logger_service.dart';
 import 'package:boda_connect/core/services/messaging_service.dart';
 import 'package:boda_connect/core/services/supplier_migration_service.dart';
 import 'package:boda_connect/firebase_options.dart';
@@ -34,7 +35,7 @@ void main() async {
     );
   } catch (e) {
     // App Check may not be available on all platforms or during hot restart
-    debugPrint('⚠️ App Check initialization skipped: $e');
+    Log.warn('App Check initialization skipped: $e');
   }
 
   // ==================== AFRICA NETWORK OPTIMIZATIONS ====================
@@ -150,10 +151,10 @@ void _runSupplierMigration() {
       final migrationService = SupplierMigrationService();
       final result = await migrationService.runMigration();
       if (result.fixed > 0) {
-        debugPrint('✅ Supplier migration: fixed ${result.fixed} suppliers');
+        Log.success('Supplier migration: fixed ${result.fixed} suppliers');
       }
     } catch (e) {
-      debugPrint('⚠️ Supplier migration error (non-critical): $e');
+      Log.warn('Supplier migration error (non-critical): $e');
     }
   });
 }

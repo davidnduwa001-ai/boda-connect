@@ -6,6 +6,7 @@ import 'package:boda_connect/core/providers/push_notification_provider.dart';
 import 'package:boda_connect/core/models/user_type.dart';
 import 'package:boda_connect/core/routing/app_router.dart';
 import 'package:boda_connect/core/services/deep_link_service.dart';
+import 'package:boda_connect/core/services/logger_service.dart';
 import 'package:boda_connect/core/services/offline_sync_service.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -81,11 +82,11 @@ class _BodaConnectAppState extends ConsumerState<BodaConnectApp> {
       await OfflineSyncService().initialize().timeout(
         _serviceTimeout,
         onTimeout: () {
-          debugPrint('⚠️ Offline sync initialization timed out');
+          Log.warn('Offline sync initialization timed out');
         },
       );
     } catch (e) {
-      debugPrint('⚠️ Failed to initialize offline sync: $e');
+      Log.warn('Failed to initialize offline sync: $e');
     }
   }
 
@@ -96,11 +97,11 @@ class _BodaConnectAppState extends ConsumerState<BodaConnectApp> {
       await notifier.initialize().timeout(
         _serviceTimeout,
         onTimeout: () {
-          debugPrint('⚠️ Push notifications initialization timed out');
+          Log.warn('Push notifications initialization timed out');
         },
       );
     } catch (e) {
-      debugPrint('⚠️ Failed to initialize notifications: $e');
+      Log.warn('Failed to initialize notifications: $e');
     }
   }
 
@@ -109,11 +110,11 @@ class _BodaConnectAppState extends ConsumerState<BodaConnectApp> {
       await DeepLinkService().initialize(appRouter).timeout(
         _serviceTimeout,
         onTimeout: () {
-          debugPrint('⚠️ Deep links initialization timed out');
+          Log.warn('Deep links initialization timed out');
         },
       );
     } catch (e) {
-      debugPrint('⚠️ Failed to initialize deep links: $e');
+      Log.warn('Failed to initialize deep links: $e');
     }
   }
 
@@ -122,7 +123,7 @@ class _BodaConnectAppState extends ConsumerState<BodaConnectApp> {
       final locale = WidgetsBinding.instance.platformDispatcher.locale;
       ref.read(marketProvider.notifier).detectFromLocale(locale);
     } catch (e) {
-      debugPrint('⚠️ Failed to detect market: $e');
+      Log.warn('Failed to detect market: $e');
     }
   }
 

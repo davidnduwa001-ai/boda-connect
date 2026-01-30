@@ -2,9 +2,9 @@ import 'package:boda_connect/core/models/booking_model.dart';
 import 'package:boda_connect/core/models/review_category_models.dart';
 import 'package:boda_connect/core/services/storage_service.dart';
 import 'package:boda_connect/core/services/blocked_dates_service.dart';
+import 'package:boda_connect/core/services/logger_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/foundation.dart';
 
 
 class BookingRepository {
@@ -60,14 +60,14 @@ class BookingRepository {
       }
 
       final bookingId = data['bookingId'] as String;
-      debugPrint('✅ Booking created via Cloud Function: $bookingId');
+      Log.success('Booking created via Cloud Function: $bookingId');
 
       return bookingId;
     } on FirebaseFunctionsException catch (e) {
-      debugPrint('❌ Cloud Function error: ${e.code} - ${e.message}');
+      Log.fail('Cloud Function error: ${e.code} - ${e.message}');
       throw Exception(e.message ?? 'Falha ao criar reserva');
     } catch (e) {
-      debugPrint('❌ Booking creation error: $e');
+      Log.fail('Booking creation error: $e');
       rethrow;
     }
   }
@@ -182,11 +182,11 @@ class BookingRepository {
       }
 
       final reviewId = data['reviewId'] as String;
-      debugPrint('✅ Review created via Cloud Function: $reviewId');
+      Log.success('Review created via Cloud Function: $reviewId');
 
       return reviewId;
     } on FirebaseFunctionsException catch (e) {
-      debugPrint('❌ Cloud Function error: ${e.code} - ${e.message}');
+      Log.fail('Cloud Function error: ${e.code} - ${e.message}');
 
       // Map error codes to user-friendly messages
       switch (e.code) {
@@ -200,7 +200,7 @@ class BookingRepository {
           throw Exception(e.message ?? 'Erro ao criar avaliação');
       }
     } catch (e) {
-      debugPrint('❌ Review creation error: $e');
+      Log.fail('Review creation error: $e');
       rethrow;
     }
   }

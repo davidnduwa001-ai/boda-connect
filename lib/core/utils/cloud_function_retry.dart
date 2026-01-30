@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/foundation.dart';
+import '../services/logger_service.dart';
 
 /// Retry configuration for Cloud Function calls
 class RetryConfig {
@@ -98,7 +98,7 @@ class CloudFunctionRetry {
         stopwatch.stop();
 
         if (attempt > 1) {
-          debugPrint('✅ ${functionName ?? 'CF'} succeeded on attempt $attempt');
+          Log.success('${functionName ?? 'CF'} succeeded on attempt $attempt');
         }
 
         return CloudFunctionResult(
@@ -111,39 +111,39 @@ class CloudFunctionRetry {
 
         // Check if error is retryable
         if (!_isRetryableError(e.code)) {
-          debugPrint('❌ ${functionName ?? 'CF'} failed with non-retryable error: ${e.code}');
+          Log.fail('${functionName ?? 'CF'} failed with non-retryable error: ${e.code}');
           stopwatch.stop();
           rethrow;
         }
 
         // Check if we have retries left
         if (attempt > config.maxRetries) {
-          debugPrint('❌ ${functionName ?? 'CF'} failed after $attempt attempts');
+          Log.fail('${functionName ?? 'CF'} failed after $attempt attempts');
           stopwatch.stop();
           rethrow;
         }
 
         // Calculate delay with exponential backoff
         final delay = _calculateDelay(attempt, config, e.code);
-        debugPrint('⏳ ${functionName ?? 'CF'} retry $attempt/${config.maxRetries} after ${delay.inMilliseconds}ms (${e.code})');
+        Log.d('${functionName ?? 'CF'} retry $attempt/${config.maxRetries} after ${delay.inMilliseconds}ms (${e.code})');
 
         await Future.delayed(delay);
       } on TimeoutException catch (e) {
         lastException = e;
 
         if (attempt > config.maxRetries) {
-          debugPrint('❌ ${functionName ?? 'CF'} timed out after $attempt attempts');
+          Log.fail('${functionName ?? 'CF'} timed out after $attempt attempts');
           stopwatch.stop();
           rethrow;
         }
 
         final delay = _calculateDelay(attempt, config, 'timeout');
-        debugPrint('⏳ ${functionName ?? 'CF'} timeout retry $attempt/${config.maxRetries} after ${delay.inMilliseconds}ms');
+        Log.d('${functionName ?? 'CF'} timeout retry $attempt/${config.maxRetries} after ${delay.inMilliseconds}ms');
 
         await Future.delayed(delay);
       } catch (e) {
         // Unknown error - don't retry
-        debugPrint('❌ ${functionName ?? 'CF'} failed with unknown error: $e');
+        Log.fail('${functionName ?? 'CF'} failed with unknown error: $e');
         stopwatch.stop();
         rethrow;
       }

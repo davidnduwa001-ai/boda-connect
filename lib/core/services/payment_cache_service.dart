@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
+import 'logger_service.dart';
 
 /// Payment status enum for caching
 enum CachedPaymentStatus {
@@ -121,9 +121,9 @@ class PaymentCacheService {
       _box = await Hive.openBox<Map>(_boxName);
       _loadFromDisk();
       _initialized = true;
-      debugPrint('✅ Payment cache initialized');
+      Log.success('Payment cache initialized');
     } catch (e) {
-      debugPrint('⚠️ Payment cache initialization failed: $e');
+      Log.warn('Payment cache initialization failed: $e');
       // Continue without persistent cache
       _initialized = true;
     }
@@ -143,11 +143,11 @@ class PaymentCacheService {
           }
         }
       } catch (e) {
-        debugPrint('⚠️ Failed to load cached payment $key: $e');
+        Log.warn('Failed to load cached payment $key: $e');
       }
     }
 
-    debugPrint('📦 Loaded ${_memoryCache.length} payments from cache');
+    Log.d('Loaded ${_memoryCache.length} payments from cache');
   }
 
   /// Get cached payment status
@@ -170,7 +170,7 @@ class PaymentCacheService {
     try {
       await _box?.put(payment.paymentId, payment.toJson());
     } catch (e) {
-      debugPrint('⚠️ Failed to persist payment cache: $e');
+      Log.warn('Failed to persist payment cache: $e');
     }
   }
 
@@ -207,7 +207,7 @@ class PaymentCacheService {
   Future<void> clear() async {
     _memoryCache.clear();
     await _box?.clear();
-    debugPrint('🗑️ Payment cache cleared');
+    Log.d('Payment cache cleared');
   }
 
   /// Clear expired entries
@@ -226,7 +226,7 @@ class PaymentCacheService {
     }
 
     if (expiredKeys.isNotEmpty) {
-      debugPrint('🧹 Cleaned up ${expiredKeys.length} expired payment cache entries');
+      Log.d('Cleaned up ${expiredKeys.length} expired payment cache entries');
     }
   }
 
