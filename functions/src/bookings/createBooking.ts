@@ -425,9 +425,8 @@ export const createBooking = functions
               }
 
               // 8. Validate package exists and belongs to supplier
+              // Packages are stored in top-level 'packages' collection with supplierId field
               const packageDoc = await db
-                  .collection("suppliers")
-                  .doc(data.supplierId)
                   .collection("packages")
                   .doc(data.packageId)
                   .get();
@@ -437,6 +436,15 @@ export const createBooking = functions
               }
 
               const packageData = packageDoc.data()!;
+
+              // Verify package belongs to this supplier
+              if (packageData.supplierId !== data.supplierId) {
+                throw Errors.permissionDenied(
+                    errorContext,
+                    "Package does not belong to supplier",
+                    "Este pacote não pertence a este fornecedor"
+                );
+              }
 
               // 9. Atomic conflict check (existing bookings on same date)
               const hasConflict = await hasBookingConflict(
