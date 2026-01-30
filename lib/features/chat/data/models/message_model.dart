@@ -49,13 +49,36 @@ class MessageModel extends MessageEntity {
   /// Create MessageModel from Firestore document
   factory MessageModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as DataMap;
+
+    // Extract conversationId from document path if not in data
+    // Path format: conversations/{conversationId}/messages/{messageId}
+    // or: chats/{conversationId}/messages/{messageId}
+    String conversationId = data['conversationId'] as String? ?? '';
+    if (conversationId.isEmpty && doc.reference.parent.parent != null) {
+      conversationId = doc.reference.parent.parent!.id;
+    }
+
+    // Handle null senderId/receiverId gracefully
+    final senderId = data['senderId'] as String? ?? '';
+    final receiverId = data['receiverId'] as String? ?? '';
+
+    // Handle timestamp - could be 'timestamp' or 'createdAt'
+    DateTime messageTimestamp;
+    if (data['timestamp'] != null) {
+      messageTimestamp = (data['timestamp'] as Timestamp).toDate();
+    } else if (data['createdAt'] != null) {
+      messageTimestamp = (data['createdAt'] as Timestamp).toDate();
+    } else {
+      messageTimestamp = DateTime.now();
+    }
+
     return MessageModel(
       id: doc.id,
-      conversationId: data['conversationId'] as String,
-      senderId: data['senderId'] as String,
-      receiverId: data['receiverId'] as String,
+      conversationId: conversationId,
+      senderId: senderId,
+      receiverId: receiverId,
       senderName: data['senderName'] as String?,
-      type: _messageTypeFromString(data['type'] as String),
+      type: _messageTypeFromString(data['type'] as String? ?? 'text'),
       text: data['text'] as String?,
       imageUrl: data['imageUrl'] as String?,
       fileUrl: data['fileUrl'] as String?,
@@ -69,7 +92,7 @@ class MessageModel extends MessageEntity {
             ).toEntity()
           : null,
       isRead: data['isRead'] as bool? ?? false,
-      timestamp: (data['timestamp'] as Timestamp).toDate(),
+      timestamp: messageTimestamp,
       readAt: data['readAt'] != null
           ? (data['readAt'] as Timestamp).toDate()
           : null,
