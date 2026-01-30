@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -7,6 +6,7 @@ import 'package:boda_connect/core/repositories/booking_repository.dart';
 import 'package:boda_connect/core/providers/auth_provider.dart';
 import 'package:boda_connect/core/providers/availability_provider.dart';
 import 'package:boda_connect/core/providers/supplier_stats_provider.dart';
+import 'package:boda_connect/core/services/logger_service.dart';
 
 // ==================== REPOSITORY PROVIDER ====================
 
@@ -244,7 +244,7 @@ class BookingNotifier extends StateNotifier<BookingState> {
         throw Exception(response['error'] ?? 'Failed to confirm booking');
       }
 
-      debugPrint('✅ Booking $bookingId confirmed via Cloud Function');
+      Log.success('Booking $bookingId confirmed via Cloud Function');
 
       // Get the booking to find supplierId (null-safe lookup)
       final booking = state.supplierBookings.cast<BookingModel?>().firstWhere(
@@ -361,7 +361,7 @@ class BookingNotifier extends StateNotifier<BookingState> {
         throw Exception(response['error'] ?? 'Failed to complete booking');
       }
 
-      debugPrint('✅ Booking $bookingId completed via Cloud Function');
+      Log.success('Booking $bookingId completed via Cloud Function');
 
       // Get the booking to find supplierId (null-safe lookup)
       final booking = state.supplierBookings.cast<BookingModel?>().firstWhere(
