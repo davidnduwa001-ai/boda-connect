@@ -75,14 +75,26 @@ class PushNotificationNotifier extends StateNotifier<NotificationState> {
   }
 
   /// Initialize push notifications
+  /// Handles all errors gracefully - push notifications are optional and should never block app startup
   Future<void> initialize() async {
     if (state.isInitialized) return;
 
     try {
       await _notificationService.initialize();
 
-      final permissionGranted = await _notificationService.areNotificationsEnabled();
-      final token = await _notificationService.getToken();
+      // These calls may also throw if permission is blocked, so wrap them
+      bool permissionGranted = false;
+      String? token;
+
+      try {
+        permissionGranted = await _notificationService.areNotificationsEnabled();
+        if (permissionGranted) {
+          token = await _notificationService.getToken();
+        }
+      } catch (_) {
+        // Permission check failed - treat as not granted
+        permissionGranted = false;
+      }
 
       state = state.copyWith(
         isInitialized: true,
@@ -90,9 +102,20 @@ class PushNotificationNotifier extends StateNotifier<NotificationState> {
         fcmToken: token,
       );
 
-      debugPrint('✅ Push notification provider initialized');
+      if (permissionGranted) {
+        debugPrint('✅ Push notification provider initialized');
+      } else {
+        debugPrint('📱 Push notifications: Not enabled (user can enable in settings)');
+      }
     } catch (e) {
-      debugPrint('❌ Failed to initialize push notifications: $e');
+      // Log gracefully without alarming error symbol
+      // Permission-blocked errors are normal when user has disabled notifications
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('permission') || errorString.contains('blocked')) {
+        debugPrint('📱 Push notifications: Permission not available');
+      } else {
+        debugPrint('📱 Push notifications: Setup skipped ($e)');
+      }
       state = state.copyWith(isInitialized: true);
     }
   }

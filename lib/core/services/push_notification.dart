@@ -116,23 +116,38 @@ class PushNotificationService {
   }
 
   /// Request notification permission
+  /// Returns false gracefully if permission is denied or blocked
   Future<bool> _requestPermission() async {
-    final settings = await _messaging.requestPermission(
-      alert: true,
-      announcement: false,
-      badge: true,
-      carPlay: false,
-      criticalAlert: false,
-      provisional: false,
-      sound: true,
-    );
+    try {
+      final settings = await _messaging.requestPermission(
+        alert: true,
+        announcement: false,
+        badge: true,
+        carPlay: false,
+        criticalAlert: false,
+        provisional: false,
+        sound: true,
+      );
 
-    final granted =
-        settings.authorizationStatus == AuthorizationStatus.authorized ||
-            settings.authorizationStatus == AuthorizationStatus.provisional;
+      final granted =
+          settings.authorizationStatus == AuthorizationStatus.authorized ||
+              settings.authorizationStatus == AuthorizationStatus.provisional;
 
-    debugPrint('📱 Notification permission: ${settings.authorizationStatus}');
-    return granted;
+      debugPrint('📱 Notification permission: ${settings.authorizationStatus}');
+      return granted;
+    } catch (e) {
+      // Handle permission-blocked and other errors gracefully
+      // This happens when user has permanently blocked notifications in device settings
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('permission-blocked') ||
+          errorString.contains('permission_blocked') ||
+          errorString.contains('not granted and blocked')) {
+        debugPrint('📱 Notifications blocked by user in device settings');
+      } else {
+        debugPrint('📱 Notification permission check failed: $e');
+      }
+      return false;
+    }
   }
 
   /// Initialize local notifications
