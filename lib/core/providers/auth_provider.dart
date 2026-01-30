@@ -133,14 +133,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (cachedUser != null && cachedUser.uid != firebaseUser.uid) {
         debugPrint('⚠️ Cached user (${cachedUser.uid}) differs from Firebase user (${firebaseUser.uid}), clearing stale cache');
         await _cacheService.clearUserCache();
-        // Reset state to avoid using stale userType
-        state = const AuthState(status: AuthStatus.loading);
-      } else {
-        state = state.copyWith(
-          status: AuthStatus.loading,
-          firebaseUser: firebaseUser,
-        );
       }
+
+      // Always set loading state with firebaseUser
+      state = state.copyWith(
+        status: AuthStatus.loading,
+        firebaseUser: firebaseUser,
+        // Clear stale userType to force reload from Firestore
+        userType: null,
+      );
 
       // Get user data from Firestore
       final user = await _authService.getUser(firebaseUser.uid);
@@ -165,8 +166,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       } else {
         // User exists in Firebase Auth but not in Firestore
         // This means registration is incomplete
-        state = state.copyWith(
+        // IMPORTANT: Clear userType to prevent stale data from affecting routing
+        debugPrint('⚠️ User document not found in Firestore for ${firebaseUser.uid}, clearing userType');
+        state = AuthState(
           status: AuthStatus.authenticated,
+          firebaseUser: firebaseUser,
+          // Explicitly NOT setting userType - will be null
         );
       }
     }

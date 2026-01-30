@@ -1,6 +1,7 @@
 import 'package:boda_connect/core/constants/colors.dart';
 import 'package:boda_connect/core/models/user_type.dart';
 import 'package:boda_connect/core/routing/route_names.dart';
+import 'package:boda_connect/core/providers/auth_provider.dart';
 import 'package:boda_connect/core/providers/email_auth_provider.dart';
 import 'package:boda_connect/core/services/email_auth_service.dart';
 import 'package:flutter/material.dart';
@@ -76,6 +77,9 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
       );
 
       if (result.success && mounted) {
+        // IMPORTANT: Refresh auth state from Firestore to get correct userType
+        await ref.read(authProvider.notifier).refreshUser();
+
         if (result.requiresVerification) {
           _showVerificationDialog();
         } else {
@@ -103,6 +107,10 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
       );
 
       if (result.success && mounted) {
+        // IMPORTANT: Refresh auth state from Firestore to get correct userType
+        // This ensures the auth provider has the newly created user document
+        await ref.read(authProvider.notifier).refreshUser();
+
         // Skip verification for testing and navigate directly
         _navigateAfterAuth();
       }
@@ -111,18 +119,19 @@ class _EmailAuthScreenState extends ConsumerState<EmailAuthScreen> {
 
   void _navigateAfterAuth() {
     if (widget.isLogin) {
-      // Login - go to appropriate home
-      if (widget.userType == UserType.supplier) {
+      // Login - use userType from auth state (refreshed from Firestore)
+      final authState = ref.read(authProvider);
+      if (authState.isSupplier) {
         context.go(Routes.supplierDashboard);
       } else {
         context.go(Routes.clientHome);
       }
     } else {
-      // Registration
+      // Registration - use widget.userType (from account type selection)
       if (widget.userType == UserType.supplier) {
         context.go(Routes.supplierBasicData);
       } else {
-        context.go(Routes.clientHome);
+        context.go(Routes.clientDetails);
       }
     }
   }
