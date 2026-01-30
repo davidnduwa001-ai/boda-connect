@@ -7,6 +7,21 @@ import '../services/category_validation_service.dart';
 import 'auth_provider.dart';
 import 'supplier_provider.dart';
 
+/// Result of supplier registration attempt
+class SupplierRegistrationResult {
+  final bool success;
+  final String? supplierId;
+  final String? error;
+
+  const SupplierRegistrationResult.success(this.supplierId)
+      : success = true,
+        error = null;
+
+  const SupplierRegistrationResult.failure(this.error)
+      : success = false,
+        supplierId = null;
+}
+
 /// Supplier Registration Data Model
 class SupplierRegistrationData {
   // Step 1: Basic Data
@@ -360,19 +375,25 @@ class SupplierRegistrationNotifier extends StateNotifier<SupplierRegistrationDat
 
   /// Complete registration - save to Firestore
   /// GATEKEEPING: Will NOT create supplier if validation fails
-  Future<String?> completeRegistration() async {
+  /// Returns a SupplierRegistrationResult with either success or error message
+  Future<SupplierRegistrationResult> completeRegistration() async {
     final userId = _ref.read(authProvider).firebaseUser?.uid;
 
     // HARD VALIDATION: Check all required fields before creating supplier
     final validationError = validateRegistration();
     if (validationError != null) {
       debugPrint('❌ Registration validation failed: $validationError');
-      return null;
+      return SupplierRegistrationResult.failure(validationError);
     }
 
-    if (userId == null || !state.isComplete) {
-      debugPrint('❌ Cannot complete registration: userId=$userId, isComplete=${state.isComplete}');
-      return null;
+    if (userId == null) {
+      debugPrint('❌ Cannot complete registration: userId is null');
+      return const SupplierRegistrationResult.failure('Sessão expirada. Por favor, faça login novamente.');
+    }
+
+    if (!state.isComplete) {
+      debugPrint('❌ Cannot complete registration: isComplete=${state.isComplete}');
+      return const SupplierRegistrationResult.failure('Por favor, complete todos os campos obrigatórios.');
     }
 
     try {
@@ -402,7 +423,7 @@ class SupplierRegistrationNotifier extends StateNotifier<SupplierRegistrationDat
 
       if (supplierId == null) {
         debugPrint('❌ Failed to create supplier document');
-        return null;
+        return const SupplierRegistrationResult.failure('Erro ao criar perfil. Por favor, tente novamente.');
       }
       debugPrint('✅ Supplier document created with ID: $supplierId');
 
@@ -492,11 +513,11 @@ class SupplierRegistrationNotifier extends StateNotifier<SupplierRegistrationDat
       debugPrint('🎉 ✅ Supplier registration completed successfully!');
       debugPrint('🆔 Supplier ID: $supplierId');
       debugPrint('📸 Photos saved: ${photoUrls.length}');
-      return supplierId;
+      return SupplierRegistrationResult.success(supplierId);
     } catch (e, stackTrace) {
       debugPrint('❌ Error completing registration: $e');
       debugPrint('Stack trace: $stackTrace');
-      return null;
+      return SupplierRegistrationResult.failure('Erro inesperado: ${e.toString().split('\n').first}');
     }
   }
 }

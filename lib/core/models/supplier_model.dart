@@ -305,7 +305,7 @@ class SupplierModel {
       portfolioPhotos: portfolioPhotos,
       videos: videos,
       location: location,
-      rating: (data['rating'] as num?)?.toDouble() ?? 5.0,
+      rating: (data['rating'] as num?)?.toDouble() ?? 0.0,
       reviewCount: (data['reviewCount'] as num?)?.toInt() ?? 0,
       completedBookings: (data['completedBookings'] as num?)?.toInt() ?? 0,
       isVerified: data['isVerified'] as bool? ?? false,

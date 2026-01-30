@@ -213,7 +213,7 @@ class _SupplierBasicDataScreenState extends ConsumerState<SupplierBasicDataScree
         supplierData['description'] = '';
         supplierData['photos'] = [];
         supplierData['videos'] = [];
-        supplierData['rating'] = 5.0;
+        supplierData['rating'] = 0.0;
         supplierData['reviewCount'] = 0;
         supplierData['isVerified'] = false;
         supplierData['isActive'] = false; // Not active until approved

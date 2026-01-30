@@ -71,33 +71,34 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               context.go(Routes.clientHome);
             } else if (authState.isSupplier) {
               // Check supplier account status before allowing dashboard access
-              await ref.read(supplierProvider.notifier).loadCurrentSupplier();
-              final supplier = ref.read(supplierProvider).currentSupplier;
+              // Use exponential backoff for retries to handle Firestore propagation delays
+              SupplierModel? supplier;
+              const maxRetries = 5;
+
+              for (int attempt = 0; attempt < maxRetries; attempt++) {
+                await ref.read(supplierProvider.notifier).loadCurrentSupplier();
+                supplier = ref.read(supplierProvider).currentSupplier;
+
+                if (supplier != null || !mounted) break;
+
+                // Exponential backoff: 500ms, 1s, 2s, 3s, 4s
+                final delay = Duration(milliseconds: 500 * (attempt + 1));
+                debugPrint('⚠️ Supplier document not found, retry ${attempt + 1}/$maxRetries after ${delay.inMilliseconds}ms...');
+                await Future.delayed(delay);
+              }
 
               if (mounted) {
                 if (supplier == null) {
-                  // Supplier document doesn't exist yet or failed to load
-                  // This can happen if registration was incomplete or just finished
-                  debugPrint('⚠️ Supplier document not found, retrying...');
-                  await Future.delayed(const Duration(milliseconds: 500));
-                  await ref.read(supplierProvider.notifier).loadCurrentSupplier();
-                  final retrySupplier = ref.read(supplierProvider).currentSupplier;
-
-                  if (mounted) {
-                    if (retrySupplier == null) {
-                      // Still no supplier - go to verification pending which handles loading
-                      debugPrint('⚠️ Supplier not found after retry, going to verification pending');
-                      context.go(Routes.supplierVerificationPending);
-                    } else if (retrySupplier.accountStatus != SupplierAccountStatus.active) {
-                      context.go(Routes.supplierVerificationPending);
-                    } else {
-                      context.go(Routes.supplierDashboard);
-                    }
-                  }
+                  // Supplier document doesn't exist after all retries
+                  // This means registration was incomplete - redirect to continue registration
+                  debugPrint('⚠️ Supplier document not found after $maxRetries retries');
+                  debugPrint('📝 User has userType=supplier but no supplier document - redirecting to registration');
+                  context.go(Routes.supplierBasicData);
                 } else if (supplier.accountStatus != SupplierAccountStatus.active) {
-                  // Redirect to verification pending screen
+                  // Supplier exists but not approved yet
                   context.go(Routes.supplierVerificationPending);
                 } else {
+                  // Supplier is active - go to dashboard
                   context.go(Routes.supplierDashboard);
                 }
               }
