@@ -113,11 +113,8 @@ class _SupplierOrdersScreenState extends ConsumerState<SupplierOrdersScreen>
     final pendingBookings = ref.watch(supplierPendingBookingsProvider);
     final confirmedBookings = ref.watch(supplierConfirmedBookingsProvider);
 
-    // History bookings: filter from all bookings in view
-    final allBookings = viewState.view?.recentBookings ?? [];
-    final historyBookings = allBookings
-        .where((b) => b.status == 'completed' || b.status == 'cancelled' || b.status == 'disputed')
-        .toList();
+    // History bookings: use dedicated history provider for complete history
+    final historyBookings = ref.watch(supplierHistoryBookingsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,

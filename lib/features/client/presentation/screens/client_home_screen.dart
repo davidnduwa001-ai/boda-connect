@@ -12,6 +12,7 @@ import 'package:boda_connect/core/providers/cart_provider.dart';
 import 'package:boda_connect/core/providers/location_provider.dart';
 import 'package:boda_connect/core/providers/suspension_provider.dart';
 import 'package:boda_connect/core/providers/navigation_provider.dart';
+import 'package:boda_connect/core/providers/settings_provider.dart';
 import 'package:boda_connect/core/routing/route_names.dart';
 import 'package:boda_connect/core/services/suspension_service.dart';
 import 'package:boda_connect/core/widgets/loading_widget.dart';
@@ -807,7 +808,23 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen>
 
   Widget _buildNearbySection() {
     final suppliersState = ref.watch(browseSuppliersProvider);
-    final suppliers = suppliersState.suppliers.take(5).toList();
+    final userRegion = ref.watch(appSettingsProvider).region;
+
+    // Sort suppliers: prioritize those matching user's region, then by rating
+    final allSuppliers = List<SupplierModel>.from(suppliersState.suppliers);
+    allSuppliers.sort((a, b) {
+      final aMatchesRegion = a.location?.city?.toLowerCase() == userRegion.toLowerCase();
+      final bMatchesRegion = b.location?.city?.toLowerCase() == userRegion.toLowerCase();
+
+      // First, prioritize suppliers in user's region
+      if (aMatchesRegion && !bMatchesRegion) return -1;
+      if (!aMatchesRegion && bMatchesRegion) return 1;
+
+      // Then sort by rating (descending)
+      return b.rating.compareTo(a.rating);
+    });
+
+    final suppliers = allSuppliers.take(5).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

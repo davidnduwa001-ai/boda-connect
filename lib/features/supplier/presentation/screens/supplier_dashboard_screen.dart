@@ -624,7 +624,7 @@ class _SupplierDashboardScreenState extends ConsumerState<SupplierDashboardScree
               month: DateFormat('MMM').format(eventDate),
               name: event.eventName,
               type: 'Evento',
-              time: '--:--',
+              time: event.eventTime ?? '--:--',
               price: '',
             );
           }),

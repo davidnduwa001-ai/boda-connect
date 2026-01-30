@@ -104,6 +104,7 @@ class SupplierEventSummary {
   final String? clientPhotoUrl;
   final String eventName;
   final DateTime eventDate;
+  final String? eventTime;
   final String? eventLocation;
   final String status;
 
@@ -113,6 +114,7 @@ class SupplierEventSummary {
     this.clientPhotoUrl,
     required this.eventName,
     required this.eventDate,
+    this.eventTime,
     this.eventLocation,
     required this.status,
   });
@@ -124,6 +126,7 @@ class SupplierEventSummary {
       clientPhotoUrl: data['clientPhotoUrl'] as String?,
       eventName: data['eventName'] as String? ?? 'Evento',
       eventDate: (data['eventDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      eventTime: data['eventTime'] as String?,
       eventLocation: data['eventLocation'] as String?,
       status: data['status'] as String? ?? 'pending',
     );
@@ -568,4 +571,30 @@ final supplierAccountFlagsProvider = Provider<SupplierAccountFlags>((ref) {
 final isSupplierBookableFromViewProvider = Provider<bool>((ref) {
   final flags = ref.watch(supplierAccountFlagsProvider);
   return flags.isBookable;
+});
+
+/// History bookings from projection (completed, cancelled, disputed)
+/// Combines all booking sources to provide complete history view
+final supplierHistoryBookingsProvider = Provider<List<SupplierBookingSummary>>((ref) {
+  final viewState = ref.watch(supplierViewProvider);
+  if (viewState.view == null) return [];
+
+  // Combine all booking sources
+  final allBookings = <SupplierBookingSummary>{};
+
+  // Add from all available lists
+  allBookings.addAll(viewState.view!.pendingBookings);
+  allBookings.addAll(viewState.view!.confirmedBookings);
+  allBookings.addAll(viewState.view!.recentBookings);
+
+  // Filter for history statuses only
+  final historyStatuses = {'completed', 'cancelled', 'disputed', 'refunded'};
+  final historyBookings = allBookings
+      .where((b) => historyStatuses.contains(b.status) && b.bookingId.isNotEmpty)
+      .toList();
+
+  // Sort by event date descending (most recent first)
+  historyBookings.sort((a, b) => b.eventDate.compareTo(a.eventDate));
+
+  return historyBookings;
 });

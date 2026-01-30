@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -54,6 +55,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         });
       }
     });
+  }
+
+  /// Convert language display name to Locale for EasyLocalization
+  Locale? _languageToLocale(String language) {
+    switch (language) {
+      case 'Português':
+        return const Locale('pt');
+      case 'English':
+        return const Locale('en');
+      default:
+        return null;
+    }
   }
 
   @override
@@ -202,11 +215,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             icon: Icons.language,
             title: 'Idioma',
             subtitle: settings.language,
-            items: ['Português', 'English', 'Français', 'Español'],
+            items: ['Português', 'English'],
             selectedValue: settings.language,
             onChanged: (value) {
               if (value != null) {
                 ref.read(appSettingsProvider.notifier).setLanguage(value);
+                // Apply locale change using EasyLocalization
+                final locale = _languageToLocale(value);
+                if (locale != null) {
+                  context.setLocale(locale);
+                }
                 _showSaveIndicator();
               }
             },
