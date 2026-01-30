@@ -127,10 +127,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _cacheService.clearUserCache();
       state = const AuthState(status: AuthStatus.unauthenticated);
     } else {
-      state = state.copyWith(
-        status: AuthStatus.loading,
-        firebaseUser: firebaseUser,
-      );
+      // IMPORTANT: Check if cached user matches current Firebase user
+      // If different user logged in, clear stale cache to prevent wrong userType routing
+      final cachedUser = await _cacheService.getCachedUser();
+      if (cachedUser != null && cachedUser.uid != firebaseUser.uid) {
+        debugPrint('⚠️ Cached user (${cachedUser.uid}) differs from Firebase user (${firebaseUser.uid}), clearing stale cache');
+        await _cacheService.clearUserCache();
+        // Reset state to avoid using stale userType
+        state = const AuthState(status: AuthStatus.loading);
+      } else {
+        state = state.copyWith(
+          status: AuthStatus.loading,
+          firebaseUser: firebaseUser,
+        );
+      }
 
       // Get user data from Firestore
       final user = await _authService.getUser(firebaseUser.uid);
@@ -138,6 +148,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (user != null) {
         // Cache user data for persistence
         await _cacheService.cacheUser(user);
+
+        debugPrint('✅ User loaded from Firestore: ${user.uid}, userType: ${user.userType.name}');
 
         state = state.copyWith(
           status: AuthStatus.authenticated,

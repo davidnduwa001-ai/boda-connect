@@ -2,6 +2,7 @@ import 'package:boda_connect/core/models/supplier_model.dart';
 import 'package:boda_connect/core/providers/auth_provider.dart';
 import 'package:boda_connect/core/providers/supplier_provider.dart';
 import 'package:boda_connect/core/routing/route_names.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -61,15 +62,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       if (mounted) {
         final authState = ref.read(authProvider);
 
+        debugPrint('🔄 Splash routing: isAuthenticated=${authState.isAuthenticated}, userType=${authState.userType?.name}, userId=${authState.user?.uid}');
+
         if (authState.isAuthenticated && authState.user != null) {
           // Check if user is suspended
           if (!authState.user!.isActive) {
+            debugPrint('➡️ Routing to suspendedAccount (user inactive)');
             context.go(Routes.suspendedAccount);
           } else {
             // Navigate based on user type
             if (authState.isClient) {
+              debugPrint('➡️ Routing to clientHome (isClient=true)');
               context.go(Routes.clientHome);
             } else if (authState.isSupplier) {
+              debugPrint('🔍 User is supplier, checking supplier document...');
               // Check supplier account status before allowing dashboard access
               // Use exponential backoff for retries to handle Firestore propagation delays
               SupplierModel? supplier;
@@ -92,17 +98,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   // Supplier document doesn't exist after all retries
                   // This means registration was incomplete - redirect to continue registration
                   debugPrint('⚠️ Supplier document not found after $maxRetries retries');
-                  debugPrint('📝 User has userType=supplier but no supplier document - redirecting to registration');
+                  debugPrint('➡️ Routing to supplierBasicData (incomplete registration)');
                   context.go(Routes.supplierBasicData);
                 } else if (supplier.accountStatus != SupplierAccountStatus.active) {
                   // Supplier exists but not approved yet
+                  debugPrint('➡️ Routing to supplierVerificationPending (accountStatus=${supplier.accountStatus})');
                   context.go(Routes.supplierVerificationPending);
                 } else {
                   // Supplier is active - go to dashboard
+                  debugPrint('➡️ Routing to supplierDashboard (supplier active)');
                   context.go(Routes.supplierDashboard);
                 }
               }
             } else {
+              debugPrint('➡️ Routing to welcome (userType is null)');
               context.go(Routes.welcome);
             }
           }
