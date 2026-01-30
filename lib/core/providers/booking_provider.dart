@@ -161,7 +161,7 @@ class BookingNotifier extends StateNotifier<BookingState> {
     }
   }
 
-  // Cancel booking (client)
+  // Cancel booking (client) - uses Cloud Function
   Future<bool> cancelBooking(String bookingId, String reason) async {
     final userId = _ref.read(authProvider).firebaseUser?.uid;
     if (userId == null) return false;
@@ -169,12 +169,23 @@ class BookingNotifier extends StateNotifier<BookingState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      await _repository.updateBookingStatus(
-        bookingId,
-        BookingStatus.cancelled,
-        reason: reason,
-        cancelledBy: userId,
-      );
+      // Use Cloud Function instead of deprecated direct Firestore write
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final callable = functions.httpsCallable('updateBookingStatus');
+
+      final result = await callable.call<Map<String, dynamic>>({
+        'bookingId': bookingId,
+        'newStatus': 'cancelled',
+        'reason': reason,
+        'cancelledBy': userId,
+      });
+
+      final response = result.data;
+      if (response['success'] != true) {
+        throw Exception(response['error'] ?? 'Failed to cancel booking');
+      }
+
+      Log.success('Booking $bookingId cancelled via Cloud Function');
 
       // Update local state
       final updatedBookings = state.clientBookings.map((b) {
@@ -194,9 +205,10 @@ class BookingNotifier extends StateNotifier<BookingState> {
         isLoading: false,
         successMessage: 'Reserva cancelada',
       );
-      
+
       return true;
     } catch (e) {
+      Log.fail('Error cancelling booking: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Erro ao cancelar reserva',
@@ -420,6 +432,8 @@ class BookingNotifier extends StateNotifier<BookingState> {
       final result = await callable.call<Map<String, dynamic>>({
         'bookingId': bookingId,
         'newStatus': 'cancelled',
+        'reason': reason,
+        'cancelledBy': userId,
       });
 
       final response = result.data;

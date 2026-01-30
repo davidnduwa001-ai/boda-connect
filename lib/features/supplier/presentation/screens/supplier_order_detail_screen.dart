@@ -166,7 +166,7 @@ class _SupplierOrderDetailScreenState
           onPressed: () => context.pop(),
         ),
         title: Text(
-          'Pedido #${booking.id.substring(0, 8)}',
+          'Pedido #${booking.id.length > 8 ? booking.id.substring(0, 8) : booking.id}',
           style: AppTextStyles.h3.copyWith(color: AppColors.gray900),
         ),
         centerTitle: true,
@@ -364,7 +364,7 @@ class _SupplierOrderDetailScreenState
           _buildInfoRow('Nome', booking.clientName ?? 'Cliente'),
           _buildInfoRowWithAction(
             'ID',
-            booking.clientId.substring(0, 12),
+            booking.clientId.length > 12 ? booking.clientId.substring(0, 12) : booking.clientId,
             Icons.copy,
             () => _copyToClipboard(booking.clientId),
           ),

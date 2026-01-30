@@ -349,7 +349,7 @@ class _SupplierOrdersScreenState extends ConsumerState<SupplierOrdersScreen>
                     ),
                   ),
                   Text(
-                    'ID: #${booking.bookingId.substring(0, 8)}',
+                    'ID: #${booking.bookingId.length > 8 ? booking.bookingId.substring(0, 8) : booking.bookingId}',
                     style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                   ),
                 ],

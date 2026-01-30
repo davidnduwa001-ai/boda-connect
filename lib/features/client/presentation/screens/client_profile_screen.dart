@@ -296,6 +296,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
     // Get real counts from providers
     final bookings = ref.watch(clientBookingsProvider);
     final favoritesState = ref.watch(favoritesProvider);
+    final authState = ref.watch(authProvider);
 
     // Count bookings (all non-cancelled)
     final bookingsCount = bookings.where((b) => b.status != BookingStatus.cancelled).length;
@@ -303,8 +304,9 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
     // Count favorites
     final favoritesCount = favoritesState.favoriteSuppliers.length;
 
-    // Reviews count (we don't have client reviews yet, so keep at 0 or count bookings completed)
-    final reviewsCount = bookings.where((b) => b.status == BookingStatus.completed).length;
+    // Client rating (defaults to 5.0 for new users)
+    final clientRating = authState.user?.rating ?? 5.0;
+    final ratingDisplay = clientRating > 0 ? clientRating.toStringAsFixed(1) : '-';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: AppDimensions.md),
@@ -315,7 +317,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
           const SizedBox(width: AppDimensions.sm),
           _buildStatCard('$favoritesCount', 'Favoritos', Icons.favorite, AppColors.error),
           const SizedBox(width: AppDimensions.sm),
-          _buildStatCard('$reviewsCount', 'Avaliações', Icons.star, AppColors.warning),
+          _buildStatCard(ratingDisplay, 'Nota', Icons.star, AppColors.warning),
         ],
       ),
     );

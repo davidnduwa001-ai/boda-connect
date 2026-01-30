@@ -10,6 +10,7 @@ import '../../../../core/constants/dimensions.dart';
 import '../../../../core/constants/text_styles.dart';
 import '../../../../core/routing/route_names.dart';
 import '../../../../core/providers/supplier_provider.dart';
+import '../../../../core/services/logger_service.dart';
 import '../widgets/stats_grid_widget.dart';
 
 class SupplierPublicProfileScreen extends ConsumerStatefulWidget {
@@ -1053,7 +1054,7 @@ class _PortfolioManagementSheetState
       }
       return null;
     } catch (e) {
-      debugPrint('Error uploading image: $e');
+      Log.fail('Error uploading image: $e');
       return null;
     }
   }
