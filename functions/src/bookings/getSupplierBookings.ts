@@ -60,14 +60,28 @@ interface GetSupplierAgendaResponse {
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * Get supplier ID from auth UID
- * Validates that the caller owns the supplier profile
+ * Get supplier info from auth UID
+ * Returns both the supplier document ID and all valid IDs for booking ownership
  */
-async function getSupplierIdFromAuth(authUid: string): Promise<string | null> {
+interface SupplierAuthInfo {
+  supplierId: string;
+  validSupplierIds: string[]; // All IDs that can appear in booking.supplierId
+}
+
+async function getSupplierAuthInfo(authUid: string): Promise<SupplierAuthInfo | null> {
   // First check if auth UID is directly a supplier ID
   const directSupplier = await db.collection("suppliers").doc(authUid).get();
-  if (directSupplier.exists && directSupplier.data()?.userId === authUid) {
-    return authUid;
+  if (directSupplier.exists) {
+    const data = directSupplier.data()!;
+    const userId = data.userId || data.authUid;
+    // Valid IDs: document ID, userId, and authUid (for legacy bookings)
+    const validIds = new Set([authUid]);
+    if (userId) validIds.add(userId);
+    if (data.authUid) validIds.add(data.authUid);
+    return {
+      supplierId: authUid,
+      validSupplierIds: Array.from(validIds),
+    };
   }
 
   // Otherwise, search for supplier by userId
@@ -81,7 +95,25 @@ async function getSupplierIdFromAuth(authUid: string): Promise<string | null> {
     return null;
   }
 
-  return supplierQuery.docs[0].id;
+  const supplierDoc = supplierQuery.docs[0];
+  const data = supplierDoc.data();
+  // Valid IDs: document ID, userId/authUid, and the auth UID
+  const validIds = new Set([supplierDoc.id, authUid]);
+  if (data.userId) validIds.add(data.userId);
+  if (data.authUid) validIds.add(data.authUid);
+
+  return {
+    supplierId: supplierDoc.id,
+    validSupplierIds: Array.from(validIds),
+  };
+}
+
+/**
+ * Get supplier ID from auth UID (backwards compatible)
+ */
+async function getSupplierIdFromAuth(authUid: string): Promise<string | null> {
+  const info = await getSupplierAuthInfo(authUid);
+  return info?.supplierId || null;
 }
 
 /**
@@ -249,6 +281,7 @@ export const getSupplierBookings = functions
  * Get details of a specific booking for the authenticated supplier
  *
  * Security: Validates that the booking belongs to the supplier
+ * Handles legacy bookings where supplierId might be userId instead of doc ID
  */
 export const getSupplierBookingDetails = functions
     .region(REGION)
@@ -270,10 +303,10 @@ export const getSupplierBookingDetails = functions
       }
 
       try {
-        // 3. Get supplier ID from auth
-        const supplierId = await getSupplierIdFromAuth(context.auth.uid);
+        // 3. Get supplier auth info (includes all valid IDs)
+        const supplierInfo = await getSupplierAuthInfo(context.auth.uid);
 
-        if (!supplierId) {
+        if (!supplierInfo) {
           throw new functions.https.HttpsError(
               "permission-denied",
               "Perfil de fornecedor não encontrado"
@@ -290,9 +323,15 @@ export const getSupplierBookingDetails = functions
           );
         }
 
-        // 5. Validate ownership
+        // 5. Validate ownership - check against ALL valid supplier IDs
         const bookingData = bookingDoc.data()!;
-        if (bookingData.supplierId !== supplierId) {
+        const bookingSupplierId = bookingData.supplierId as string;
+
+        if (!supplierInfo.validSupplierIds.includes(bookingSupplierId)) {
+          console.log(
+              `Ownership check failed: booking.supplierId=${bookingSupplierId}, ` +
+              `validIds=${supplierInfo.validSupplierIds.join(",")}`
+          );
           throw new functions.https.HttpsError(
               "permission-denied",
               "Esta reserva não pertence ao seu perfil"
@@ -503,10 +542,10 @@ export const respondToBooking = functions
       }
 
       try {
-        // 3. Get supplier ID from auth
-        const supplierId = await getSupplierIdFromAuth(context.auth.uid);
+        // 3. Get supplier auth info (includes all valid IDs)
+        const supplierInfo = await getSupplierAuthInfo(context.auth.uid);
 
-        if (!supplierId) {
+        if (!supplierInfo) {
           throw new functions.https.HttpsError(
               "permission-denied",
               "Perfil de fornecedor não encontrado"
@@ -525,14 +564,17 @@ export const respondToBooking = functions
         }
 
         const booking = bookingDoc.data()!;
+        const bookingSupplierId = booking.supplierId as string;
 
-        // 5. Validate ownership
-        if (booking.supplierId !== supplierId) {
+        // 5. Validate ownership - check against ALL valid supplier IDs
+        if (!supplierInfo.validSupplierIds.includes(bookingSupplierId)) {
           throw new functions.https.HttpsError(
               "permission-denied",
               "Esta reserva não pertence ao seu perfil"
           );
         }
+
+        const supplierId = supplierInfo.supplierId;
 
         // 6. Validate current status
         if (booking.status !== "pending") {
