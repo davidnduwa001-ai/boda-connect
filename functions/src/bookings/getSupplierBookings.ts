@@ -22,18 +22,27 @@ interface SupplierBooking {
   clientId: string;
   clientName?: string;
   clientPhoto?: string;
+  supplierId: string;
+  supplierName?: string;
   packageId: string;
   packageName: string;
   eventName: string;
+  eventType?: string;
   eventDate: string; // ISO string
   eventTime?: string;
   eventLocation?: string;
+  guestCount?: number;
   totalPrice: number;
   paidAmount: number;
   remainingAmount: number;
+  currency: string;
   status: string;
   paymentStatus: string;
+  payments: unknown[];
   notes?: string;
+  clientNotes?: string;
+  supplierNotes?: string;
+  selectedCustomizations: string[];
   createdAt: string;
   updatedAt: string;
   uiFlags: SupplierBookingUIFlags;
@@ -207,18 +216,27 @@ function sanitizeBookingForSupplier(
     clientId: data.clientId,
     clientName: clientInfo.name || "Cliente",
     clientPhoto: clientInfo.photo,
+    supplierId: data.supplierId || "",
+    supplierName: data.supplierName || "",
     packageId: data.packageId || "",
     packageName: data.packageName || "",
     eventName: data.eventName || "",
+    eventType: data.eventType,
     eventDate: data.eventDate?.toDate?.()?.toISOString() || new Date().toISOString(),
     eventTime: data.eventTime,
     eventLocation: data.eventLocation,
+    guestCount: data.guestCount,
     totalPrice,
     paidAmount,
     remainingAmount: totalPrice - paidAmount,
+    currency: data.currency || "AOA",
     status,
     paymentStatus: data.paymentStatus || "unpaid",
+    payments: data.payments || [],
     notes: data.notes,
+    clientNotes: data.clientNotes,
+    supplierNotes: data.supplierNotes,
+    selectedCustomizations: data.selectedCustomizations || [],
     createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
     updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
     uiFlags: calculateUIFlags(status, paidAmount, totalPrice, data.createdAt),
