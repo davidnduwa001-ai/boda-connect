@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(flutter test:*)",
+      "Bash(find:*)",
+      "Read(//c/Users/admin/Desktop/boda_connect_flutter_full_starter/**)",
+      "Bash(flutter doctor:*)",
+      "Bash(keytool:*)",
+      "Bash(./gradlew clean:*)",
+      "Bash(flutter run:*)",
+      "Bash(flutter build:*)",
+      "Bash(adb install:*)",
+      "Bash(git checkout:*)",
+      "Bash(gradlew signingReport:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(firebase firestore:rules:get:*)",
+      "Bash(firebase projects:list:*)",
+      "Bash(timeout 30 cmd /c \"type C:\\\\Users\\\\admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-admin-Desktop-boda-connect-flutter-full-starter\\\\tasks\\\\b767c7b.output\")",
+      "Bash(timeout 10 cmd /c \"ping 127.0.0.1 -n 6 > nul && type C:\\\\Users\\\\admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-admin-Desktop-boda-connect-flutter-full-starter\\\\tasks\\\\b767c7b.output\")",
+      "Bash(findstr:*)",
+      "Bash(dir:*)",
+      "Bash(dart run:*)",
+      "Bash(ls \"c:\\\\Users\\\\admin\\\\Desktop\\\\boda_connect_flutter_full_starter\\\\android\\\\app\\\\src\\\\main\\\\res\\\\mipmap-hdpi\"\" && echo \"\" && echo \"=== iOS ICONS ===\" && ls \"c:UsersadminDesktopboda_connect_flutter_full_starteriosRunnerAssets.xcassetsAppIcon.appiconset\"\")",
+      "Bash(ls \"c:\\\\Users\\\\admin\\\\Desktop\\\\boda_connect_flutter_full_starter\\\\web\\\\icons\"\" && echo \"\" && echo \"=== WEB FAVICON ===\" && ls \"c:UsersadminDesktopboda_connect_flutter_full_starterwebfavicon.png\" && echo \"\" && echo \"=== ASSETS LOGO ===\" && ls \"c:UsersadminDesktopboda_connect_flutter_full_starterassetsimagesboda_logo.png \")",
+      "Bash(git add:*)"
+    ]
+  }
+}

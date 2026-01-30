@@ -1,0 +1,262 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==================== HELPER FUNCTIONS ====================
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user is the owner of the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Check if user is a supplier
+    function isSupplier() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'supplier';
+    }
+    
+    // Check if user is a client
+    function isClient() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'client';
+    }
+    
+    // Validate timestamp is server timestamp
+    function isValidTimestamp(field) {
+      return request.resource.data[field] == request.time;
+    }
+    
+    // ==================== USERS ====================
+    
+    match /users/{userId} {
+      // Anyone authenticated can read basic user info
+      allow read: if isAuthenticated();
+      
+      // Users can only create their own document
+      allow create: if isOwner(userId) && 
+        request.resource.data.keys().hasAll(['phone', 'createdAt']) &&
+        isValidTimestamp('createdAt');
+      
+      // Users can only update their own document
+      allow update: if isOwner(userId) && 
+        // Prevent changing critical fields
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'role']);
+      
+      // Only admins can delete users
+      allow delete: if isAdmin();
+    }
+    
+    // ==================== SUPPLIERS ====================
+
+    match /suppliers/{supplierId} {
+      // Anyone can read supplier profiles (public)
+      allow read: if true;
+
+      // Only the owner can create their supplier profile
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.keys().hasAll(['userId', 'businessName', 'createdAt']);
+
+      // Owner OR admin can update supplier profile
+      // Admin updates are needed for: accountStatus, reviewedAt, reviewedBy, isActive (onboarding approval)
+      allow update: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isAdmin()) &&
+        // Prevent changing userId
+        request.resource.data.userId == resource.data.userId;
+
+      // Only owner or admin can delete
+      allow delete: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // Supplier packages subcollection
+      match /packages/{packageId} {
+        allow read: if true;
+        allow create, update: if isAuthenticated() && 
+          get(/databases/$(database)/documents/suppliers/$(supplierId)).data.userId == request.auth.uid;
+        allow delete: if isAuthenticated() && 
+          get(/databases/$(database)/documents/suppliers/$(supplierId)).data.userId == request.auth.uid;
+      }
+    }
+    
+    // ==================== BOOKINGS ====================
+    
+    match /bookings/{bookingId} {
+      // Participants can read their bookings
+      allow read: if isAuthenticated() && 
+        (resource.data.clientId == request.auth.uid || 
+         resource.data.supplierId == request.auth.uid ||
+         // Or supplier's userId matches
+         get(/databases/$(database)/documents/suppliers/$(resource.data.supplierId)).data.userId == request.auth.uid);
+      
+      // Clients can create bookings
+      allow create: if isAuthenticated() && 
+        request.resource.data.clientId == request.auth.uid &&
+        request.resource.data.keys().hasAll(['clientId', 'supplierId', 'status', 'createdAt']) &&
+        request.resource.data.status == 'pending';
+      
+      // Participants can update bookings
+      allow update: if isAuthenticated() && 
+        (resource.data.clientId == request.auth.uid || 
+         get(/databases/$(database)/documents/suppliers/$(resource.data.supplierId)).data.userId == request.auth.uid) &&
+        // Prevent changing critical fields
+        request.resource.data.clientId == resource.data.clientId &&
+        request.resource.data.supplierId == resource.data.supplierId;
+      
+      // Only admins can delete bookings
+      allow delete: if isAdmin();
+    }
+    
+    // ==================== CHATS ====================
+    
+    match /chats/{chatId} {
+      // Only participants can read chat
+      allow read: if isAuthenticated() && 
+        request.auth.uid in resource.data.participants;
+      
+      // Authenticated users can create chats they're part of
+      allow create: if isAuthenticated() && 
+        request.auth.uid in request.resource.data.participants &&
+        request.resource.data.participants.size() == 2;
+      
+      // Participants can update chat metadata
+      allow update: if isAuthenticated() && 
+        request.auth.uid in resource.data.participants;
+      
+      // No one can delete chats (archive only)
+      allow delete: if false;
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        // Participants can read messages
+        allow read: if isAuthenticated() && 
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        
+        // Participants can create messages
+        allow create: if isAuthenticated() && 
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants &&
+          request.resource.data.senderId == request.auth.uid;
+        
+        // Only sender can update their message (for soft delete)
+        allow update: if isAuthenticated() && 
+          resource.data.senderId == request.auth.uid &&
+          // Only allow updating isDeleted field
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isDeleted', 'text']);
+        
+        // No hard deletes
+        allow delete: if false;
+      }
+    }
+    
+    // ==================== REVIEWS ====================
+    
+    match /reviews/{reviewId} {
+      // Anyone can read reviews (public)
+      allow read: if true;
+      
+      // Only clients who had a completed booking can create reviews
+      allow create: if isAuthenticated() && 
+        request.resource.data.clientId == request.auth.uid &&
+        request.resource.data.keys().hasAll(['clientId', 'supplierId', 'rating', 'createdAt']) &&
+        request.resource.data.rating >= 1 &&
+        request.resource.data.rating <= 5;
+      
+      // Clients can update their own reviews
+      allow update: if isAuthenticated() && 
+        resource.data.clientId == request.auth.uid &&
+        // Prevent changing critical fields
+        request.resource.data.clientId == resource.data.clientId &&
+        request.resource.data.supplierId == resource.data.supplierId;
+      
+      // Only owner or admin can delete
+      allow delete: if isAuthenticated() && 
+        (resource.data.clientId == request.auth.uid || isAdmin());
+    }
+    
+    // ==================== FAVORITES ====================
+    
+    match /favorites/{favoriteId} {
+      // Users can read their own favorites
+      allow read: if isAuthenticated() && 
+        resource.data.clientId == request.auth.uid;
+      
+      // Users can create their own favorites
+      allow create: if isAuthenticated() && 
+        request.resource.data.clientId == request.auth.uid;
+      
+      // Users can delete their own favorites
+      allow delete: if isAuthenticated() && 
+        resource.data.clientId == request.auth.uid;
+      
+      // No updates needed for favorites
+      allow update: if false;
+    }
+    
+    // ==================== NOTIFICATIONS ====================
+    
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+      
+      // Only Cloud Functions can create notifications
+      allow create: if false;
+      
+      // Users can update (mark as read) their own notifications
+      allow update: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      
+      // Users can delete their own notifications
+      allow delete: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    // ==================== CATEGORIES ====================
+    
+    match /categories/{categoryId} {
+      // Anyone can read categories (public)
+      allow read: if true;
+      
+      // Only admins can write
+      allow write: if isAdmin();
+      
+      // Services subcollection
+      match /services/{serviceId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+    }
+    
+    // ==================== WHATSAPP OTPs ====================
+    // These should only be accessed by Cloud Functions
+    
+    match /whatsapp_otps/{otpId} {
+      allow read, write: if false;
+    }
+    
+    // ==================== APP CONFIG ====================
+    
+    match /config/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // ==================== REPORTS (Admin) ====================
+    
+    match /reports/{reportId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,21 @@
+# Flutter/Dart/Pub
+.dart_tool/
+.packages
+pubspec.lock
+build/
+
+# IDEs
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Firebase configs (keep local or in secret storage)
+**/GoogleService-Info.plist
+**/google-services.json
+
+# Secrets - Never commit these
+scripts/serviceAccountKey.json
+functions/.env
+*.env

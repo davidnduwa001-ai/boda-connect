@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Bundle Info -->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>BODA CONNECT</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Boda Connect</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+
+	<!-- iOS Version Requirements -->
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>MinimumOSVersion</key>
+	<string>12.0</string>
+
+	<!-- Device Orientation -->
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!-- ==================== DEEP LINKS ==================== -->
+
+	<!-- Custom URL Scheme (bodaconnect://) -->
+	<!-- Used for payment callbacks from Multicaixa Express -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>ao.bodaconnect.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>bodaconnect</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- Universal Links (Associated Domains configured in Xcode) -->
+	<!-- NOTE: Also configure in Xcode: Signing & Capabilities > Associated Domains -->
+	<!-- Add: applinks:bodaconnect.ao and applinks:bodaconnect.page.link -->
+
+	<!-- Firebase Dynamic Links -->
+	<key>FirebaseDynamicLinksCustomDomains</key>
+	<array>
+		<string>https://bodaconnect.page.link</string>
+		<string>https://bodaconnect.ao</string>
+	</array>
+
+	<!-- ==================== PERMISSIONS ==================== -->
+
+	<!-- Camera Permission (for profile photos, document uploads) -->
+	<key>NSCameraUsageDescription</key>
+	<string>BODA CONNECT precisa de acesso à câmera para tirar fotos do seu perfil e documentos.</string>
+
+	<!-- Photo Library Permission -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>BODA CONNECT precisa de acesso às suas fotos para upload de imagens do perfil e portfólio.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>BODA CONNECT precisa de permissão para guardar fotos na sua biblioteca.</string>
+
+	<!-- Location Permission (for finding nearby suppliers) -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>BODA CONNECT usa a sua localização para encontrar fornecedores próximos a si.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>BODA CONNECT usa a sua localização para encontrar fornecedores próximos a si.</string>
+
+	<!-- Microphone Permission (for video recording) -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>BODA CONNECT precisa de acesso ao microfone para gravar vídeos.</string>
+
+	<!-- Contacts Permission (optional, for inviting friends) -->
+	<key>NSContactsUsageDescription</key>
+	<string>BODA CONNECT pode usar os seus contactos para convidar amigos.</string>
+
+	<!-- ==================== FIREBASE ==================== -->
+
+	<!-- Background Fetch for FCM -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+
+	<!-- ==================== APP TRANSPORT SECURITY ==================== -->
+
+	<!-- Allow HTTPS connections (required for API calls) -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
+
+	<!-- ==================== APPEARANCE ==================== -->
+
+	<!-- Status Bar -->
+	<key>UIStatusBarHidden</key>
+	<false/>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+
+	<!-- Allow iTunes File Sharing (for debug) -->
+	<key>UIFileSharingEnabled</key>
+	<false/>
+
+	<!-- Support both Light and Dark mode -->
+	<key>UIUserInterfaceStyle</key>
+	<string>Automatic</string>
+</dict>
+</plist>

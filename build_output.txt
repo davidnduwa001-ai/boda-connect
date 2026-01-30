@@ -1,0 +1,127 @@
+The system cannot find the file specified.
+Launching lib\main.dart on SM A205U1 in debug mode...
+Running Gradle task 'assembleDebug'...                          
+The system cannot find the file specified.
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+warning: [options] source value 8 is obsolete and will be removed in a future release
+warning: [options] target value 8 is obsolete and will be removed in a future release
+warning: [options] To suppress warnings about obsolete options, use -Xlint:-options.
+3 warnings
+Running Gradle task 'assembleDebug'...                            242.4s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...           7.0s
+D/FlutterGeolocator(  578): Attaching Geolocator to activity
+D/FlutterGeolocator(  578): Creating service.
+D/FlutterGeolocator(  578): Binding to location service.
+D/FlutterGeolocator(  578): Geolocator foreground service connected
+D/FlutterGeolocator(  578): Initializing Geolocator services
+D/FlutterGeolocator(  578): Flutter engine connected. Connected engine count 1
+Syncing files to device SM A205U1...                            
+I/Choreographer(  578): Skipped 87 frames!  The application may be doing too much work on its main thread.
+I/ViewRootImpl@ae5935a[MainActivity](  578): [DP] cancelDraw io.flutter.embedding.android.FlutterActivityAndFragmentDelegate$2@812796b  isViewVisible: true
+D/FlutterGeolocator(  578): Geolocator foreground service connected
+D/FlutterGeolocator(  578): Initializing Geolocator services
+D/FlutterGeolocator(  578): Flutter engine connected. Connected engine count 2
+I/FLTFireMsgService(  578): FlutterFirebaseMessagingBackgroundService started!
+I/flutter (  578): [90m[🌎 Easy Localization] [DEBUG] Localization initialized[0m
+I/ViewRootImpl@ae5935a[MainActivity](  578): [DP] cancelDraw io.flutter.embedding.android.FlutterActivityAndFragmentDelegate$2@812796b  isViewVisible: true
+I/flutter (  578): [90m[🌎 Easy Localization] [DEBUG] Start[0m
+I/ViewRootImpl@ae5935a[MainActivity](  578): [DP] cancelDraw io.flutter.embedding.android.FlutterActivityAndFragmentDelegate$2@812796b  isViewVisible: true
+I/flutter (  578): [90m[🌎 Easy Localization] [DEBUG] Init state[0m
+I/flutter (  578): [90m[🌎 Easy Localization] [DEBUG] Build[0m
+I/flutter (  578): [90m[🌎 Easy Localization] [DEBUG] Init Localization Delegate[0m
+I/flutter (  578): [90m[🌎 Easy Localization] [DEBUG] Init provider[0m
+I/flutter (  578): [90m[🌎 Easy Localization] [DEBUG] Load Localization Delegate[0m
+I/flutter (  578): [90m[🌎 Easy Localization] [DEBUG] Load asset from assets/translations[0m
+Syncing files to device SM A205U1...                               532ms
+
+Flutter run key commands.
+r Hot reload. 
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on SM A205U1 is available at: http://127.0.0.1:52813/_YrRb23B6RE=/
+I/Choreographer(  578): Skipped 121 frames!  The application may be doing too much work on its main thread.
+I/SurfaceControl(  578): nativeRelease nativeObject s[545075979456]
+I/SurfaceControl(  578): nativeRelease nativeObject e[545075979456]
+I/SurfaceControl(  578): assignNativeObject: nativeObject = 0 Surface(name=null)/@0x989c6ba / android.view.SurfaceControl.readFromParcel:1121 android.view.IWindowSession$Stub$Proxy.relayout:1824 android.view.ViewRootImpl.relayoutWindow:9005 android.view.ViewRootImpl.performTraversals:3360 android.view.ViewRootImpl.doTraversal:2618 android.view.ViewRootImpl$TraversalRunnable.run:9971 android.view.Choreographer$CallbackRecord.run:1010 android.view.Choreographer.doCallbacks:809 android.view.Choreographer.doFrame:744 android.view.Choreographer$FrameDisplayEventReceiver.run:995 
+I/SurfaceControl(  578): nativeRelease nativeObject s[547752245920]
+I/SurfaceControl(  578): nativeRelease nativeObject e[547752245920]
+I/SurfaceControl(  578): nativeRelease nativeObject s[547752246208]
+I/SurfaceControl(  578): nativeRelease nativeObject e[547752246208]
+I/ViewRootImpl@ae5935a[MainActivity](  578): Relayout returned: old=(0,0,720,1560) new=(0,0,720,1560) req=(720,1560)0 dur=14 res=0x3 s={true 545074122752} ch=false fn=1
+I/ViewRootImpl@ae5935a[MainActivity](  578): updateBoundsLayer: shouldReparent = false t = android.view.SurfaceControl$Transaction@f24a93 sc = Surface(name=Bounds for - com.example.boda_connect/com.example.boda_connect.MainActivity@0)/@0xa94bad0 frame = 1
+I/ViewRootImpl@ae5935a[MainActivity](  578): [DP] cancelDraw io.flutter.embedding.android.FlutterActivityAndFragmentDelegate$2@812796b  isViewVisible: true
+I/flutter (  578): [90m[🌎 Easy Localization] [DEBUG] Build[0m
+I/flutter (  578): [90m[🌎 Easy Localization] [DEBUG] Init Localization Delegate[0m
+I/flutter (  578): [90m[🌎 Easy Localization] [DEBUG] Init provider[0m
+I/Gralloc4(  578): mapper 4.x is not supported
+W/Gralloc3(  578): mapper 3.x is not supported
+I/gralloc (  578): Arm Module v1.0
+I/Choreographer(  578): Skipped 113 frames!  The application may be doing too much work on its main thread.
+I/ViewRootImpl@ae5935a[MainActivity](  578): [DP] pd() Asnyc report
+I/SurfaceView(  578): setParentSpaceRectangle: useBLAST = false position = Rect(0, 0 - 720, 1476) frameNumber = 1 t = android.view.SurfaceControl$Transaction@4759a85
+I/SurfaceView(  578): applySurfaceTransforms: t = android.view.SurfaceControl$Transaction@4759a85 surfaceControl = Surface(name=SurfaceView - com.example.boda_connect/com.example.boda_connect.MainActivity@1a9cbe5@0)/@0x30580da frame = 1
+I/SurfaceView(  578): applySurfaceTransforms: postScaleX = 1.0 postScaleY = 1.0
+I/OpenGLRenderer(  578): Davey! duration=2554ms; Flags=0, IntendedVsync=415933278188891, Vsync=415935161522149, OldestInputEvent=9223372036854775807, NewestInputEvent=0, HandleInputStart=415935175957882, AnimationStart=415935175969882, PerformTraversalsStart=415935175973921, DrawStart=415935178396997, SyncQueued=415935181108074, SyncStart=415935182224767, IssueDrawCommandsStart=415935183837305, SwapBuffers=415935818327151, FrameCompleted=415935833694459, DequeueBufferDuration=5356115, QueueBufferDuration=8578077, GpuCompleted=0, 
+The Flutter DevTools debugger and profiler on SM A205U1 is available at: http://127.0.0.1:9104?uri=http://127.0.0.1:52813/_YrRb23B6RE=/
+I/ViewRootImpl@ae5935a[MainActivity](  578): [DP] pdf(0) 1 android.view.ViewRootImpl.lambda$performDraw$1$ViewRootImpl:4668 android.view.-$$Lambda$ViewRootImpl$DJd0VUYJgsebcnSohO6h8zc_ONI.run:6 android.os.Handler.handleCallback:938 
+I/ViewRootImpl@ae5935a[MainActivity](  578): [DP] rdf()
+D/ProfileInstaller(  578): Installing profile for com.example.boda_connect
+I/flutter (  578): 📱 Notification permission: AuthorizationStatus.authorized
+I/ViewRootImpl@ae5935a[MainActivity](  578): MSG_WINDOW_FOCUS_CHANGED 1 1
+D/InputMethodManager(  578): prepareNavigationBarInfo() DecorView@6851ae4[MainActivity]
+D/InputMethodManager(  578): getNavigationBarColor() -1
+D/InputMethodManager(  578): prepareNavigationBarInfo() DecorView@6851ae4[MainActivity]
+D/InputMethodManager(  578): getNavigationBarColor() -1
+V/InputMethodManager(  578): Starting input: tba=com.example.boda_connect ic=null mNaviBarColor -1 mIsGetNaviBarColorSuccess true , NavVisible : true , NavTrans : false
+D/InputMethodManager(  578): startInputInner - Id : 0
+I/InputMethodManager(  578): startInputInner - mService.startInputOrWindowGainedFocus
+D/InputTransport(  578): Input channel constructed: 'ClientS', fd=147
+D/InputMethodManager(  578): prepareNavigationBarInfo() DecorView@6851ae4[MainActivity]
+D/InputMethodManager(  578): getNavigationBarColor() -1
+V/InputMethodManager(  578): Starting input: tba=com.example.boda_connect ic=null mNaviBarColor -1 mIsGetNaviBarColorSuccess true , NavVisible : true , NavTrans : false
+D/InputMethodManager(  578): startInputInner - Id : 0
+I/SurfaceControl(  578): nativeRelease nativeObject s[542439247392]
+I/SurfaceControl(  578): nativeRelease nativeObject e[542439247392]
+I/SurfaceControl(  578): nativeRelease nativeObject s[545075979456]
+I/SurfaceControl(  578): nativeRelease nativeObject e[545075979456]
+I/flutter (  578): ✅ Deep Link Service initialized
+I/flutter (  578): ✅ OfflineSyncService initialized
+I/flutter (  578): ✅ Push notifications initialized
+I/flutter (  578): 📶 Connectivity changed: Online
+Lost connection to device.

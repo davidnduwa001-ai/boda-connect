@@ -1,0 +1,111 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Supplier photos - stored at: suppliers/{supplierId}/photos/{filename}
+    match /suppliers/{supplierId}/photos/{fileName} {
+      // Anyone can read supplier photos (for public browsing)
+      allow read: if true;
+      
+      // Only the supplier owner can upload/delete their photos
+      allow write: if request.auth != null && 
+        (request.auth.uid == supplierId || 
+         request.auth.uid == firestore.get(/databases/(default)/documents/suppliers/$(supplierId)).data.userId);
+    }
+    
+    // Supplier videos - stored at: suppliers/{supplierId}/videos/{filename}
+    match /suppliers/{supplierId}/videos/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+        (request.auth.uid == supplierId || 
+         request.auth.uid == firestore.get(/databases/(default)/documents/suppliers/$(supplierId)).data.userId);
+    }
+    
+    // Package photos - stored at: packages/{packageId}/photos/{filename}
+    match /packages/{packageId}/photos/{fileName} {
+      // Anyone can read package photos (for browsing)
+      allow read: if true;
+      
+      // Only authenticated users can upload (ownership checked at package level)
+      allow create: if request.auth != null;
+      
+      // Only package owner can delete photos
+      allow delete: if request.auth != null && 
+        request.auth.uid == firestore.get(/databases/(default)/documents/packages/$(packageId)).data.supplierId;
+    }
+    
+    // User profile photos - stored at: users/{userId}/profile/{filename}
+    match /users/{userId}/profile/{fileName} {
+      allow read: if true; // Public profile photos
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Chat attachments - stored at: chats/{chatId}/attachments/{filename}
+    match /chats/{chatId}/attachments/{fileName} {
+      // Only chat participants can read
+      allow read: if request.auth != null && 
+        request.auth.uid in firestore.get(/databases/(default)/documents/chats/$(chatId)).data.participantIds;
+      
+      // Only chat participants can upload
+      allow write: if request.auth != null && 
+        request.auth.uid in firestore.get(/databases/(default)/documents/chats/$(chatId)).data.participantIds;
+    }
+    
+    // Booking documents/receipts - stored at: bookings/{bookingId}/documents/{filename}
+    match /bookings/{bookingId}/documents/{fileName} {
+      // Only booking participants can read
+      allow read: if request.auth != null && 
+        (request.auth.uid == firestore.get(/databases/(default)/documents/bookings/$(bookingId)).data.clientId ||
+         request.auth.uid == firestore.get(/databases/(default)/documents/bookings/$(bookingId)).data.supplierId);
+      
+      // Only booking participants can upload
+      allow write: if request.auth != null && 
+        (request.auth.uid == firestore.get(/databases/(default)/documents/bookings/$(bookingId)).data.clientId ||
+         request.auth.uid == firestore.get(/databases/(default)/documents/bookings/$(bookingId)).data.supplierId);
+    }
+    
+    // ==================== VERIFICATION DOCUMENTS ====================
+    // Highly sensitive - only supplier owner and admin can access
+    match /verification/{supplierId}/{fileName} {
+      // Only supplier owner can read their verification documents
+      allow read: if request.auth != null &&
+        (request.auth.uid == supplierId ||
+         request.auth.uid == firestore.get(/databases/(default)/documents/suppliers/$(supplierId)).data.userId);
+
+      // Only supplier owner can upload verification documents
+      allow write: if request.auth != null &&
+        (request.auth.uid == supplierId ||
+         request.auth.uid == firestore.get(/databases/(default)/documents/suppliers/$(supplierId)).data.userId) &&
+        isValidDocument();
+    }
+
+    // ==================== FILE VALIDATION FUNCTIONS ====================
+    // Max 5MB for images, 50MB for videos, 10MB for documents
+    function isValidImage() {
+      return request.resource.size < 5 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+    }
+
+    function isValidVideo() {
+      return request.resource.size < 50 * 1024 * 1024 &&
+        request.resource.contentType.matches('video/.*');
+    }
+
+    function isValidDocument() {
+      return request.resource.size < 10 * 1024 * 1024 &&
+        (request.resource.contentType.matches('image/.*') ||
+         request.resource.contentType == 'application/pdf');
+    }
+
+    // Prevent executable files
+    function isNotExecutable() {
+      return !request.resource.contentType.matches('.*(executable|javascript|x-sh|x-bat|x-cmd).*');
+    }
+
+    // Block all other paths - DENY BY DEFAULT
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
