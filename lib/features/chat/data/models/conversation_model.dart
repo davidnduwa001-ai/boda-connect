@@ -47,11 +47,31 @@ class ConversationModel extends ConversationEntity {
   /// Create ConversationModel from Firestore document
   factory ConversationModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as DataMap;
+
+    // Handle legacy documents that might have null clientId/supplierId
+    // Extract from participants array if needed
+    final participants = List<String>.from(data['participants'] as List<dynamic>? ?? []);
+    String clientId = data['clientId'] as String? ?? '';
+    String supplierId = data['supplierId'] as String? ?? '';
+
+    // If clientId/supplierId are empty, try to extract from participants
+    if (clientId.isEmpty && participants.isNotEmpty) {
+      clientId = participants.first;
+    }
+    if (supplierId.isEmpty && participants.length > 1) {
+      supplierId = participants[1];
+    }
+
+    // Skip invalid conversations that don't have required data
+    if (clientId.isEmpty || supplierId.isEmpty) {
+      throw FormatException('Conversation ${doc.id} missing required clientId or supplierId');
+    }
+
     return ConversationModel(
       id: doc.id,
-      participants: List<String>.from(data['participants'] as List<dynamic>),
-      clientId: data['clientId'] as String,
-      supplierId: data['supplierId'] as String,
+      participants: participants,
+      clientId: clientId,
+      supplierId: supplierId,
       clientName: data['clientName'] as String?,
       supplierName: data['supplierName'] as String?,
       clientPhoto: data['clientPhoto'] as String?,
@@ -63,8 +83,12 @@ class ConversationModel extends ConversationEntity {
       lastMessageSenderId: data['lastMessageSenderId'] as String?,
       unreadCount: _parseUnreadCount(data['unreadCount']),
       isActive: data['isActive'] as bool? ?? true,
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
-      updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+      createdAt: data['createdAt'] != null
+          ? (data['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
+      updatedAt: data['updatedAt'] != null
+          ? (data['updatedAt'] as Timestamp).toDate()
+          : DateTime.now(),
     );
   }
 
