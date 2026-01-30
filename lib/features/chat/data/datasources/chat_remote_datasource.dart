@@ -388,43 +388,45 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         }
       }
 
-      // Strategy 3: Search from supplier's perspective using each possible supplier ID
-      for (final searchSupplierId in supplierIdsToSearch) {
-        debugPrint('🔍 Trying supplier-based search with $searchSupplierId...');
-        final supplierQuery = await _conversationsCollection
-            .where('participants', arrayContains: searchSupplierId)
-            .get();
+      // Strategy 3: Search from CLIENT's perspective (security rules require authenticated user in participants)
+      // Query all conversations where CLIENT is a participant, then filter for matching supplier
+      debugPrint('🔍 Trying client-based search for conversations with any of: $supplierIdsToSearch');
+      final clientQuery = await _conversationsCollection
+          .where('participants', arrayContains: clientId)
+          .get();
 
-        for (final doc in supplierQuery.docs) {
-          final data = doc.data() as Map<String, dynamic>?;
-          if (data != null) {
-            final participants = data['participants'] as List<dynamic>?;
-            if (participants != null && participants.contains(clientId)) {
-              debugPrint('✅ Found conversation via supplier search ($searchSupplierId): ${doc.id}');
-              return ConversationModel.fromFirestore(doc);
-            }
-            if (data['clientId'] == clientId) {
-              debugPrint('✅ Found conversation via clientId match: ${doc.id}');
+      for (final doc in clientQuery.docs) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data != null) {
+          final participants = data['participants'] as List<dynamic>?;
+          final docSupplierId = data['supplierId'] as String?;
+
+          // Check if any of the supplier IDs match
+          for (final searchSupplierId in supplierIdsToSearch) {
+            if ((participants != null && participants.contains(searchSupplierId)) ||
+                docSupplierId == searchSupplierId) {
+              debugPrint('✅ Found conversation via client-based search ($searchSupplierId): ${doc.id}');
               return ConversationModel.fromFirestore(doc);
             }
           }
         }
+      }
 
-        // Also try legacy 'chats' collection for supplier-based search
-        debugPrint('🔍 Trying supplier-based search with $searchSupplierId in legacy chats...');
-        final legacySupplierQuery = await _firestore.collection('chats')
-            .where('participants', arrayContains: searchSupplierId)
-            .get();
+      // Also try legacy 'chats' collection with client-based search
+      debugPrint('🔍 Trying client-based search in legacy chats...');
+      final legacyClientQuery = await _firestore.collection('chats')
+          .where('participants', arrayContains: clientId)
+          .get();
 
-        for (final doc in legacySupplierQuery.docs) {
-          final data = doc.data();
-          final participants = data['participants'] as List<dynamic>?;
-          if (participants != null && participants.contains(clientId)) {
-            debugPrint('✅ Found conversation via supplier search in legacy chats ($searchSupplierId): ${doc.id}');
-            return ConversationModel.fromFirestore(doc);
-          }
-          if (data['clientId'] == clientId) {
-            debugPrint('✅ Found conversation via clientId match in legacy chats: ${doc.id}');
+      for (final doc in legacyClientQuery.docs) {
+        final data = doc.data();
+        final participants = data['participants'] as List<dynamic>?;
+        final docSupplierId = data['supplierId'] as String?;
+
+        for (final searchSupplierId in supplierIdsToSearch) {
+          if ((participants != null && participants.contains(searchSupplierId)) ||
+              docSupplierId == searchSupplierId) {
+            debugPrint('✅ Found conversation via client-based search in legacy chats ($searchSupplierId): ${doc.id}');
             return ConversationModel.fromFirestore(doc);
           }
         }
