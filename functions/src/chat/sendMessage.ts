@@ -327,7 +327,7 @@ export const sendMessage = functions
         const messageData: Record<string, unknown> = {
           senderId,
           senderName: senderInfo.name,
-          senderPhoto: senderInfo.photo,
+          senderPhoto: senderInfo.photo || null, // Firestore doesn't accept undefined
           receiverId,
           type: messageType,
           timestamp: now,
@@ -347,12 +347,12 @@ export const sendMessage = functions
             description: data.quoteData.description,
             amount: data.quoteData.amount,
             currency: data.quoteData.currency || "AOA",
-            validUntil: data.quoteData.validUntil,
+            validUntil: data.quoteData.validUntil || null, // Firestore doesn't accept undefined
           };
           messageData.text = data.text || "";
         } else if (messageType === "file") {
-          messageData.fileUrl = data.fileUrl;
-          messageData.fileName = data.fileName;
+          messageData.fileUrl = data.fileUrl || null;
+          messageData.fileName = data.fileName || null;
           messageData.text = data.text || "";
         }
 
