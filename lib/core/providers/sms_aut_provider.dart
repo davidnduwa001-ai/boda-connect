@@ -232,6 +232,21 @@ class SmsAuthNotifier extends StateNotifier<SmsAuthState> {
         return 'Muitas tentativas. Aguarde alguns minutos.';
       case 'quota-exceeded':
         return 'Limite de SMS excedido. Tente WhatsApp.';
+      case 'captcha-check-failed':
+        return 'Verificação de segurança falhou. Recarregue a página.';
+      case 'web-context-already-presented':
+      case 'web-context-cancelled':
+        return 'Verificação cancelada. Tente novamente.';
+      case 'operation-not-allowed':
+        return 'SMS não está habilitado. Tente WhatsApp.';
+      case 'missing-client-identifier':
+        return 'Erro de configuração. Tente WhatsApp.';
+      case 'network-request-failed':
+        return 'Erro de conexão. Verifique sua internet.';
+      case 'app-not-authorized':
+        return 'App não autorizado. Tente WhatsApp.';
+      case 'internal-error':
+        return 'Erro interno. Tente WhatsApp.';
       default:
         return 'Erro ao enviar SMS. Tente WhatsApp.';
     }

@@ -32,25 +32,34 @@ class EmailAuthService {
   // ==================== SIGN UP ====================
 
   /// Check if email is already registered and get user type
-  /// Returns null if email is not registered, otherwise returns user type info
+  /// Returns null if email is not registered or if query fails (e.g., not authenticated)
+  /// This method gracefully handles permission denied errors since it may be called
+  /// before user authentication is complete.
   Future<Map<String, dynamic>?> checkEmailUserType(String email) async {
     if (email.isEmpty) return null;
 
-    final snapshot = await _firestore
-        .collection('users')
-        .where('email', isEqualTo: email.toLowerCase().trim())
-        .limit(1)
-        .get();
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: email.toLowerCase().trim())
+          .limit(1)
+          .get();
 
-    if (snapshot.docs.isEmpty) return null;
+      if (snapshot.docs.isEmpty) return null;
 
-    final userData = snapshot.docs.first.data();
-    return {
-      'exists': true,
-      'userType': userData['userType'] as String? ?? 'client',
-      'userId': snapshot.docs.first.id,
-      'isActive': userData['isActive'] as bool? ?? true,
-    };
+      final userData = snapshot.docs.first.data();
+      return {
+        'exists': true,
+        'userType': userData['userType'] as String? ?? 'client',
+        'userId': snapshot.docs.first.id,
+        'isActive': userData['isActive'] as bool? ?? true,
+      };
+    } catch (e) {
+      // If permission denied (user not authenticated yet), return null
+      // Firebase Auth will handle duplicate email errors during account creation
+      debugPrint('⚠️ checkEmailUserType failed (expected if not authenticated): $e');
+      return null;
+    }
   }
 
   /// Create new account with email and password
