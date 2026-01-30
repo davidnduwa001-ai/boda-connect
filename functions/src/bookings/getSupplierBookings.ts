@@ -134,6 +134,10 @@ async function getClientInfo(clientId: string): Promise<{name?: string; photo?: 
   }
 }
 
+// Expiration configuration
+const EXPIRE_DAYS = 7; // Total days before auto-expiration
+const EXPIRING_SOON_HOURS = 48; // Show warning when this many hours left
+
 /**
  * Calculate UI flags based on booking state
  * Determines which actions are available to the supplier
@@ -141,10 +145,22 @@ async function getClientInfo(clientId: string): Promise<{name?: string; photo?: 
 function calculateUIFlags(
     status: string,
     paidAmount: number,
-    totalPrice: number
+    totalPrice: number,
+    createdAt?: FirebaseFirestore.Timestamp
 ): SupplierBookingUIFlags {
   const isPaid = paidAmount > 0;
   const isFullyPaid = paidAmount >= totalPrice;
+
+  // Calculate if expiring soon (within 48 hours of 7-day deadline)
+  let isExpiringSoon = false;
+  if (status === "pending" && createdAt) {
+    const createdDate = createdAt.toDate();
+    const now = new Date();
+    const hoursElapsed = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60);
+    const totalHours = EXPIRE_DAYS * 24;
+    const hoursRemaining = totalHours - hoursElapsed;
+    isExpiringSoon = hoursRemaining <= EXPIRING_SOON_HOURS && hoursRemaining > 0;
+  }
 
   return {
     // Can accept if pending and paid
@@ -165,8 +181,8 @@ function calculateUIFlags(
     // Can always view details
     canViewDetails: true,
 
-    // Show expiring soon if pending and older than 48h
-    showExpiringSoon: false, // Requires createdAt comparison
+    // Show expiring soon if pending and within 48h of expiration
+    showExpiringSoon: isExpiringSoon,
 
     // Show payment received if paid but not fully paid
     showPaymentReceived: isPaid && !isFullyPaid,
@@ -205,7 +221,7 @@ function sanitizeBookingForSupplier(
     notes: data.notes,
     createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
     updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-    uiFlags: calculateUIFlags(status, paidAmount, totalPrice),
+    uiFlags: calculateUIFlags(status, paidAmount, totalPrice, data.createdAt),
   };
 }
 
