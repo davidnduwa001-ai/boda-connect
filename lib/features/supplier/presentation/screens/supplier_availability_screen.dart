@@ -380,7 +380,7 @@ class _SupplierAvailabilityScreenState
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  blockedDate.reason,
+                  _translateReason(blockedDate.reason),
                   style: AppTextStyles.bodySmall
                       .copyWith(color: AppColors.textSecondary),
                 ),
@@ -454,6 +454,22 @@ class _SupplierAvailabilityScreenState
         ],
       ),
     );
+  }
+
+  /// Translate English reason texts to Portuguese
+  String _translateReason(String reason) {
+    final translations = {
+      'booked': 'Reservado',
+      'blocked': 'Bloqueado',
+      'unavailable': 'Indisponível',
+      'reserved': 'Reservado',
+      'pending': 'Pedido pendente',
+      'confirmed': 'Reserva confirmada',
+      'Data bloqueada': 'Data bloqueada',
+      'Reserva confirmada': 'Reserva confirmada',
+      'Pedido pendente': 'Pedido pendente',
+    };
+    return translations[reason.toLowerCase()] ?? translations[reason] ?? reason;
   }
 
   void _showBlockDateDialog() {
