@@ -10,6 +10,7 @@ import '../../../../core/constants/colors.dart';
 import '../../../../core/constants/dimensions.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/routing/route_names.dart';
+import '../../../../core/services/logger_service.dart';
 
 class SupplierBasicDataScreen extends ConsumerStatefulWidget {
   const SupplierBasicDataScreen({super.key});
@@ -139,7 +140,7 @@ class _SupplierBasicDataScreenState extends ConsumerState<SupplierBasicDataScree
         _updateFormValidity();
       }
     } catch (e) {
-      debugPrint('Error loading existing data: $e');
+      Log.fail('Error loading existing data: $e');
     }
   }
 
@@ -224,11 +225,11 @@ class _SupplierBasicDataScreenState extends ConsumerState<SupplierBasicDataScree
         supplierData['accountStatus'] = 'pendingReview'; // Requires admin approval
 
         await FirebaseFirestore.instance.collection('suppliers').add(supplierData);
-        debugPrint('✅ Created new supplier profile with PENDING_REVIEW status');
+        Log.success('Created new supplier profile with PENDING_REVIEW status');
       } else {
         // Update existing supplier
         await supplierQuery.docs.first.reference.update(supplierData);
-        debugPrint('✅ Updated existing supplier profile');
+        Log.success('Updated existing supplier profile');
       }
 
       // Update Firebase Auth display name
@@ -242,7 +243,7 @@ class _SupplierBasicDataScreenState extends ConsumerState<SupplierBasicDataScree
         context.go(Routes.supplierDocumentVerification);
       }
     } catch (e) {
-      debugPrint('❌ Error saving supplier data: $e');
+      Log.fail('Error saving supplier data: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

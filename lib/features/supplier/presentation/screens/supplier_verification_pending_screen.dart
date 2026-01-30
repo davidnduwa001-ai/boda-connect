@@ -7,6 +7,7 @@ import '../../../../core/models/supplier_model.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/providers/supplier_provider.dart';
 import '../../../../core/routing/route_names.dart';
+import '../../../../core/services/logger_service.dart';
 import '../../../../core/services/supplier_onboarding_service.dart';
 
 /// Screen shown to suppliers while their account is pending review
@@ -56,7 +57,7 @@ class _SupplierVerificationPendingScreenState
 
         retryCount++;
         if (retryCount < maxRetries) {
-          debugPrint('⚠️ Supplier not loaded, retry $retryCount of $maxRetries...');
+          Log.warn('Supplier not loaded, retry $retryCount of $maxRetries...');
           await Future.delayed(Duration(milliseconds: 500 * retryCount));
         }
       }
