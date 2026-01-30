@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
 /// Cancellation policy tiers
@@ -161,122 +162,54 @@ class CancellationService {
     );
   }
 
-  /// Process a booking cancellation
+  /// Process a booking cancellation using Cloud Function
+  ///
+  /// This method calls the cancelBooking Cloud Function which handles:
+  /// - Authorization validation
+  /// - State machine validation
+  /// - Booking status update
+  /// - Escrow refund processing
+  /// - Audit logging
+  /// - Notifications
   Future<bool> processBookingCancellation({
     required String bookingId,
-    required String cancelledBy, // userId
-    required String cancelledByRole, // 'client' or 'supplier'
+    required String cancelledBy, // userId (unused - Cloud Function uses auth)
+    required String cancelledByRole, // 'client' or 'supplier' (unused - Cloud Function determines role)
     required String reason,
-    bool forceNoRefund = false, // For policy violations
+    bool forceNoRefund = false, // For policy violations (not supported by Cloud Function yet)
   }) async {
     try {
-      final bookingRef = _firestore.collection('bookings').doc(bookingId);
-      final bookingDoc = await bookingRef.get();
+      // Call the cancelBooking Cloud Function for secure server-side cancellation
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final callable = functions.httpsCallable('cancelBooking');
 
-      if (!bookingDoc.exists) {
-        throw Exception('Reserva não encontrada');
-      }
-
-      final bookingData = bookingDoc.data()!;
-      final currentStatus = bookingData['status'] as String;
-
-      // Validate cancellation is allowed
-      final allowedStatuses = ['pending', 'accepted', 'confirmed', 'paid'];
-      if (!allowedStatuses.contains(currentStatus)) {
-        throw Exception('Esta reserva não pode ser cancelada no status atual');
-      }
-
-      final eventDate = (bookingData['eventDate'] as Timestamp).toDate();
-      final totalAmount = (bookingData['totalAmount'] as num).toDouble();
-
-      // Calculate refund
-      final result = calculateCancellation(
-        eventDate: eventDate,
-        totalAmount: totalAmount,
-        isClientCancelling: cancelledByRole == 'client',
-      );
-
-      // Special handling for supplier cancellation (may penalize supplier)
-      double finalRefundAmount = result.refundAmount;
-      double supplierPenalty = 0;
-
-      if (cancelledByRole == 'supplier') {
-        // Supplier cancellation - client gets full refund, supplier may be penalized
-        finalRefundAmount = totalAmount;
-        supplierPenalty = totalAmount * 0.10; // 10% penalty to supplier
-      }
-
-      if (forceNoRefund) {
-        finalRefundAmount = 0;
-      }
-
-      // Create cancellation record
-      await _firestore.collection('cancellations').add({
+      final result = await callable.call<Map<String, dynamic>>({
         'bookingId': bookingId,
-        'clientId': bookingData['clientId'],
-        'supplierId': bookingData['supplierId'],
-        'cancelledBy': cancelledBy,
-        'cancelledByRole': cancelledByRole,
         'reason': reason,
-        'eventDate': bookingData['eventDate'],
-        'totalAmount': totalAmount,
-        'refundAmount': finalRefundAmount,
-        'supplierPayout': cancelledByRole == 'supplier' ? 0 : result.supplierPayout,
-        'supplierPenalty': supplierPenalty,
-        'platformFee': result.platformFee,
-        'refundPercentage': cancelledByRole == 'supplier' ? 100 : result.refundPercentage,
-        'tier': result.tier.name,
-        'daysBeforeEvent': result.timeUntilEvent.inDays,
-        'hoursBeforeEvent': result.timeUntilEvent.inHours,
-        'wasWithin72Hours': result.isWithinFreeCancellation,
-        'forceNoRefund': forceNoRefund,
-        'createdAt': Timestamp.now(),
       });
 
-      // Update booking status
-      await bookingRef.update({
-        'status': 'cancelled',
-        'cancelledAt': Timestamp.now(),
-        'cancelledBy': cancelledBy,
-        'cancelledByRole': cancelledByRole,
-        'cancellationReason': reason,
-        'refundAmount': finalRefundAmount,
-        'refundStatus': finalRefundAmount > 0 ? 'pending' : 'not_applicable',
-        'updatedAt': Timestamp.now(),
-      });
-
-      // Add to booking status history
-      await bookingRef.collection('status_history').add({
-        'status': 'cancelled',
-        'changedBy': cancelledBy,
-        'changedByRole': cancelledByRole,
-        'reason': reason,
-        'refundAmount': finalRefundAmount,
-        'createdAt': Timestamp.now(),
-      });
-
-      // Process refund if applicable
-      if (finalRefundAmount > 0) {
-        await _processRefund(
-          bookingId: bookingId,
-          paymentId: bookingData['paymentId'] as String?,
-          escrowId: bookingData['escrowId'] as String?,
-          refundAmount: finalRefundAmount,
-          clientId: bookingData['clientId'] as String,
-        );
+      final data = result.data;
+      if (data['success'] != true) {
+        throw Exception(data['error'] ?? 'Falha ao cancelar reserva');
       }
 
-      // Update supplier stats if cancellation affects confirmed booking
-      if (currentStatus == 'confirmed' || currentStatus == 'paid') {
-        final supplierId = bookingData['supplierId'] as String;
-        await _firestore.collection('suppliers').doc(supplierId).update({
-          'confirmedBookings': FieldValue.increment(-1),
-          'updatedAt': Timestamp.now(),
-        });
-      }
-
-      debugPrint('Booking $bookingId cancelled. Refund: $finalRefundAmount');
+      debugPrint('Booking $bookingId cancelled via Cloud Function');
       return true;
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Error processing cancellation (Cloud Function): ${e.code} - ${e.message}');
+      // Translate common error codes to Portuguese
+      switch (e.code) {
+        case 'unauthenticated':
+          throw Exception('Você precisa estar autenticado para cancelar');
+        case 'permission-denied':
+          throw Exception('Você não tem permissão para cancelar esta reserva');
+        case 'not-found':
+          throw Exception('Reserva não encontrada');
+        case 'failed-precondition':
+          throw Exception(e.message ?? 'Esta reserva não pode ser cancelada');
+        default:
+          throw Exception(e.message ?? 'Erro ao cancelar reserva');
+      }
     } catch (e) {
       debugPrint('Error processing cancellation: $e');
       rethrow;
@@ -298,7 +231,9 @@ class CancellationService {
 
       final bookingData = bookingDoc.data()!;
       final eventDate = (bookingData['eventDate'] as Timestamp).toDate();
-      final totalAmount = (bookingData['totalAmount'] as num).toDouble();
+      // Support both totalPrice (new) and totalAmount (legacy) for backwards compatibility
+      final totalAmount = (bookingData['totalPrice'] as num?)?.toDouble() ??
+          (bookingData['totalAmount'] as num?)?.toDouble() ?? 0.0;
 
       return calculateCancellation(
         eventDate: eventDate,
@@ -405,110 +340,6 @@ class CancellationService {
         'cancellationRate': 0.0,
       };
     }
-  }
-
-  /// Process refund through payment service
-  Future<void> _processRefund({
-    required String bookingId,
-    required String? paymentId,
-    required String? escrowId,
-    required double refundAmount,
-    required String clientId,
-  }) async {
-    try {
-      debugPrint('💰 Processing refund of $refundAmount for booking $bookingId');
-
-      // Create refund record
-      final refundDoc = await _firestore.collection('refunds').add({
-        'bookingId': bookingId,
-        'paymentId': paymentId,
-        'escrowId': escrowId,
-        'clientId': clientId,
-        'amount': refundAmount,
-        'currency': 'AOA',
-        'status': 'pending',
-        'createdAt': Timestamp.now(),
-        'updatedAt': Timestamp.now(),
-      });
-
-      // If there's an escrow, process refund through escrow
-      if (escrowId != null) {
-        await _firestore.collection('escrow').doc(escrowId).update({
-          'status': 'refunded',
-          'refundedAt': Timestamp.now(),
-          'refundAmount': refundAmount,
-          'refundId': refundDoc.id,
-          'updatedAt': Timestamp.now(),
-        });
-      }
-
-      // If there's a direct payment, mark it for refund
-      if (paymentId != null) {
-        await _firestore.collection('payments').doc(paymentId).update({
-          'refundStatus': 'pending',
-          'refundAmount': refundAmount,
-          'refundRequestedAt': Timestamp.now(),
-          'refundId': refundDoc.id,
-          'updatedAt': Timestamp.now(),
-        });
-      }
-
-      // Update booking with refund info
-      await _firestore.collection('bookings').doc(bookingId).update({
-        'refundStatus': 'processing',
-        'refundId': refundDoc.id,
-        'updatedAt': Timestamp.now(),
-      });
-
-      // Create notification for client about refund
-      await _firestore.collection('notifications').add({
-        'userId': clientId,
-        'type': 'refund_initiated',
-        'title': 'Reembolso Iniciado',
-        'message': 'O seu reembolso de ${_formatPrice(refundAmount.toInt())} Kz está sendo processado. '
-            'O valor será creditado em até 7 dias úteis.',
-        'data': {
-          'bookingId': bookingId,
-          'refundId': refundDoc.id,
-          'amount': refundAmount,
-        },
-        'isRead': false,
-        'createdAt': Timestamp.now(),
-      });
-
-      // Update refund status to processing (in production, this would trigger actual payment provider refund)
-      await refundDoc.update({
-        'status': 'processing',
-        'updatedAt': Timestamp.now(),
-      });
-
-      debugPrint('✅ Refund initiated: ${refundDoc.id}');
-    } catch (e) {
-      debugPrint('❌ Error processing refund: $e');
-      // Don't rethrow - refund failure shouldn't block cancellation
-      // Create a failed refund record for manual processing
-      await _firestore.collection('refunds').add({
-        'bookingId': bookingId,
-        'paymentId': paymentId,
-        'escrowId': escrowId,
-        'clientId': clientId,
-        'amount': refundAmount,
-        'currency': 'AOA',
-        'status': 'failed',
-        'error': e.toString(),
-        'requiresManualProcessing': true,
-        'createdAt': Timestamp.now(),
-        'updatedAt': Timestamp.now(),
-      });
-    }
-  }
-
-  /// Format price for display
-  String _formatPrice(int price) {
-    return price.toString().replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]}.',
-        );
   }
 
   /// Get policy explanation text
