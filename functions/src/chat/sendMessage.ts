@@ -43,41 +43,108 @@ interface ConversationResponse {
 // ==================== HELPER FUNCTIONS ====================
 
 /**
+ * Get supplier document ID from auth UID (if user is a supplier)
+ * Suppliers may have their document ID different from their auth UID
+ */
+async function getSupplierDocumentId(authUid: string): Promise<string | null> {
+  // First check if there's a supplier document with this ID directly
+  const directDoc = await db.collection("suppliers").doc(authUid).get();
+  if (directDoc.exists) {
+    return authUid;
+  }
+
+  // Check if there's a supplier document where userId matches auth UID
+  const supplierQuery = await db.collection("suppliers")
+      .where("userId", "==", authUid)
+      .limit(1)
+      .get();
+
+  if (!supplierQuery.empty) {
+    return supplierQuery.docs[0].id;
+  }
+
+  return null;
+}
+
+/**
  * Check if user is participant in conversation
+ * Handles the case where suppliers may have document ID != auth UID
  */
 async function isParticipant(
     conversationId: string,
     userId: string
 ): Promise<boolean> {
+  // Get all possible IDs for this user (auth UID and possibly supplier document ID)
+  const userIds = new Set<string>([userId]);
+
+  // Check if user is a supplier with a different document ID
+  const supplierDocId = await getSupplierDocumentId(userId);
+  if (supplierDocId && supplierDocId !== userId) {
+    userIds.add(supplierDocId);
+    console.log(`isParticipant: User ${userId} is supplier with document ID ${supplierDocId}`);
+  }
+
   // Try conversations collection first
   let doc = await db.collection("conversations").doc(conversationId).get();
   if (doc.exists) {
     const participants = doc.data()?.participants as string[] || [];
-    return participants.includes(userId);
+    const clientId = doc.data()?.clientId as string | undefined;
+    const supplierId = doc.data()?.supplierId as string | undefined;
+
+    // Check if any of the user's IDs match participants, clientId, or supplierId
+    for (const id of userIds) {
+      if (participants.includes(id) || clientId === id || supplierId === id) {
+        return true;
+      }
+    }
   }
 
   // Fallback to chats collection (legacy)
   doc = await db.collection("chats").doc(conversationId).get();
   if (doc.exists) {
     const participants = doc.data()?.participants as string[] || [];
-    return participants.includes(userId);
+    const clientId = doc.data()?.clientId as string | undefined;
+    const supplierId = doc.data()?.supplierId as string | undefined;
+
+    // Check if any of the user's IDs match
+    for (const id of userIds) {
+      if (participants.includes(id) || clientId === id || supplierId === id) {
+        return true;
+      }
+    }
   }
 
+  console.log(`isParticipant: User ${userId} (IDs: ${[...userIds].join(", ")}) not found in conversation ${conversationId}`);
   return false;
 }
 
 /**
  * Get user display info
+ * Handles the case where suppliers may have document ID != auth UID
  */
 async function getUserInfo(userId: string): Promise<{
   name: string;
   photo?: string;
   isSupplier: boolean;
 }> {
-  // Check if user is a supplier
+  // Check if user is a supplier by document ID
   const supplierDoc = await db.collection("suppliers").doc(userId).get();
   if (supplierDoc.exists) {
     const data = supplierDoc.data()!;
+    return {
+      name: data.businessName || "Fornecedor",
+      photo: data.logoUrl || data.profileImageUrl,
+      isSupplier: true,
+    };
+  }
+
+  // Check if user is a supplier by userId field (auth UID != document ID case)
+  const supplierQuery = await db.collection("suppliers")
+      .where("userId", "==", userId)
+      .limit(1)
+      .get();
+  if (!supplierQuery.empty) {
+    const data = supplierQuery.docs[0].data();
     return {
       name: data.businessName || "Fornecedor",
       photo: data.logoUrl || data.profileImageUrl,
@@ -101,11 +168,19 @@ async function getUserInfo(userId: string): Promise<{
 
 /**
  * Get the other participant in a conversation
+ * Handles the case where suppliers may have document ID != auth UID
  */
 async function getOtherParticipant(
     conversationId: string,
     currentUserId: string
 ): Promise<string | null> {
+  // Get all possible IDs for current user
+  const currentUserIds = new Set<string>([currentUserId]);
+  const supplierDocId = await getSupplierDocumentId(currentUserId);
+  if (supplierDocId && supplierDocId !== currentUserId) {
+    currentUserIds.add(supplierDocId);
+  }
+
   // Try conversations collection first
   let doc = await db.collection("conversations").doc(conversationId).get();
   if (!doc.exists) {
@@ -114,8 +189,24 @@ async function getOtherParticipant(
 
   if (!doc.exists) return null;
 
-  const participants = doc.data()?.participants as string[] || [];
-  return participants.find((p) => p !== currentUserId) || null;
+  const data = doc.data()!;
+  const participants = data.participants as string[] || [];
+  const clientId = data.clientId as string | undefined;
+  const supplierId = data.supplierId as string | undefined;
+
+  // If we can identify clientId and supplierId, use those for more reliable matching
+  // Check if current user is the client
+  if (clientId && currentUserIds.has(clientId)) {
+    return supplierId || participants.find((p) => !currentUserIds.has(p)) || null;
+  }
+
+  // Check if current user is the supplier
+  if (supplierId && currentUserIds.has(supplierId)) {
+    return clientId || participants.find((p) => !currentUserIds.has(p)) || null;
+  }
+
+  // Fallback: find participant that doesn't match any of current user's IDs
+  return participants.find((p) => !currentUserIds.has(p)) || null;
 }
 
 // ==================== CLOUD FUNCTIONS ====================
