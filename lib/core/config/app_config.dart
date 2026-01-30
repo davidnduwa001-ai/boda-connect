@@ -7,6 +7,51 @@ class AppConfig {
   // Private constructor
   AppConfig._();
 
+  // ==================== CREDENTIAL VALIDATION ====================
+
+  /// Validates all required credentials are configured
+  /// Returns list of missing credentials, empty if all configured
+  static List<String> validateCredentials() {
+    final missing = <String>[];
+
+    if (proxyPayApiKey.contains('YOUR_')) {
+      missing.add('ProxyPay API Key');
+    }
+    if (proxyPayEntityId.contains('YOUR_')) {
+      missing.add('ProxyPay Entity ID');
+    }
+    if (googleMapsApiKey.contains('YOUR_')) {
+      missing.add('Google Maps API Key');
+    }
+    if (algoliaAppId.contains('YOUR_')) {
+      missing.add('Algolia App ID');
+    }
+    if (algoliaSearchApiKey.contains('YOUR_')) {
+      missing.add('Algolia Search API Key');
+    }
+    if (supportPhone.contains('XXX')) {
+      missing.add('Support Phone Number');
+    }
+
+    return missing;
+  }
+
+  /// Throws if required credentials missing in production
+  static void assertProductionReady() {
+    if (!isProduction) return;
+
+    final missing = validateCredentials();
+    if (missing.isNotEmpty) {
+      throw StateError(
+        'PRODUCTION BLOCKED: Missing credentials: ${missing.join(", ")}. '
+        'Configure in lib/core/config/app_config.dart before launch.',
+      );
+    }
+  }
+
+  /// Check if app has all credentials configured
+  static bool get isFullyConfigured => validateCredentials().isEmpty;
+
   // ==================== APP INFO ====================
 
   static const String appName = 'BODA CONNECT';

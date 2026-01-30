@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+import 'package:boda_connect/core/services/logger_service.dart';
 
 /// Service to fix supplier data inconsistencies
 ///
@@ -15,7 +15,7 @@ class SupplierMigrationService {
   /// Run full migration - call this on app startup or periodically
   /// This ensures all suppliers with accountStatus: active have isActive: true
   Future<MigrationResult> runMigration() async {
-    debugPrint('🔄 Starting supplier migration...');
+    Log.d('🔄 Starting supplier migration...');
 
     int fixed = 0;
     int alreadyCorrect = 0;
@@ -25,7 +25,7 @@ class SupplierMigrationService {
     try {
       // Get ALL suppliers
       final allSuppliers = await _suppliers.get();
-      debugPrint('📊 Total suppliers found: ${allSuppliers.docs.length}');
+      Log.d('📊 Total suppliers found: ${allSuppliers.docs.length}');
 
       final batch = _firestore.batch();
       int batchCount = 0;
@@ -48,7 +48,7 @@ class SupplierMigrationService {
           batchCount++;
           fixed++;
           messages.add('Fixed missing isActive for "$businessName" -> $shouldBeActive');
-          debugPrint('  🔧 Fixed missing isActive for "$businessName" (accountStatus: $accountStatus) -> $shouldBeActive');
+          Log.d('  🔧 Fixed missing isActive for "$businessName" (accountStatus: $accountStatus) -> $shouldBeActive');
         } else if (isActive != shouldBeActive) {
           // Field exists but is incorrect - sync with accountStatus
           batch.update(doc.reference, {
@@ -57,7 +57,7 @@ class SupplierMigrationService {
           batchCount++;
           fixed++;
           messages.add('Synced isActive for "$businessName": $isActive -> $shouldBeActive');
-          debugPrint('  🔧 Synced isActive for "$businessName": $isActive -> $shouldBeActive');
+          Log.d('  🔧 Synced isActive for "$businessName": $isActive -> $shouldBeActive');
         } else {
           alreadyCorrect++;
         }
@@ -66,17 +66,17 @@ class SupplierMigrationService {
         if (batchCount >= 400) {
           await batch.commit();
           batchCount = 0;
-          debugPrint('  💾 Committed batch of 400 updates');
+          Log.d('  💾 Committed batch of 400 updates');
         }
       }
 
       // Commit remaining operations
       if (batchCount > 0) {
         await batch.commit();
-        debugPrint('  💾 Committed final batch of $batchCount updates');
+        Log.d('  💾 Committed final batch of $batchCount updates');
       }
 
-      debugPrint('✅ Migration complete: $fixed fixed, $alreadyCorrect already correct');
+      Log.d('✅ Migration complete: $fixed fixed, $alreadyCorrect already correct');
 
       return MigrationResult(
         success: true,
@@ -87,7 +87,7 @@ class SupplierMigrationService {
         messages: messages,
       );
     } catch (e) {
-      debugPrint('❌ Migration error: $e');
+      Log.d('❌ Migration error: $e');
       return MigrationResult(
         success: false,
         totalProcessed: 0,
@@ -104,7 +104,7 @@ class SupplierMigrationService {
     try {
       final doc = await _suppliers.doc(supplierId).get();
       if (!doc.exists) {
-        debugPrint('❌ Supplier $supplierId not found');
+        Log.d('❌ Supplier $supplierId not found');
         return false;
       }
 
@@ -116,14 +116,14 @@ class SupplierMigrationService {
         await _suppliers.doc(supplierId).update({
           'isActive': true,
         });
-        debugPrint('✅ Fixed supplier $supplierId visibility');
+        Log.d('✅ Fixed supplier $supplierId visibility');
         return true;
       } else {
-        debugPrint('⚠️ Supplier $supplierId accountStatus is "$accountStatus", not activating');
+        Log.d('⚠️ Supplier $supplierId accountStatus is "$accountStatus", not activating');
         return false;
       }
     } catch (e) {
-      debugPrint('❌ Error fixing supplier visibility: $e');
+      Log.d('❌ Error fixing supplier visibility: $e');
       return false;
     }
   }
@@ -162,7 +162,7 @@ class SupplierMigrationService {
         missingIsActiveField: missingIsActive,
       );
     } catch (e) {
-      debugPrint('❌ Error getting diagnostics: $e');
+      Log.d('❌ Error getting diagnostics: $e');
       return SupplierDiagnostics.empty();
     }
   }
@@ -189,10 +189,10 @@ class SupplierMigrationService {
 
       if (count > 0) {
         await batch.commit();
-        debugPrint('✅ Synced $count approved suppliers to be visible');
+        Log.d('✅ Synced $count approved suppliers to be visible');
       }
     } catch (e) {
-      debugPrint('❌ Error syncing approved suppliers: $e');
+      Log.d('❌ Error syncing approved suppliers: $e');
     }
   }
 }

@@ -50,9 +50,9 @@ void main() async {
   }
 
   // ==================== SUPPLIER DATA MIGRATION ====================
-  // Run migration in background to fix suppliers with missing isActive field
-  // This ensures approved suppliers (accountStatus: active) appear in search
-  _runSupplierMigration();
+  // Run migration BLOCKING to fix suppliers with missing isActive field
+  // This ensures approved suppliers appear in search BEFORE app loads
+  await _runSupplierMigration();
 
   // ==================== CRASHLYTICS ====================
 
@@ -143,18 +143,30 @@ void main() async {
   );
 }
 
-/// Run supplier migration in background (non-blocking)
+/// Run supplier migration with timeout to ensure suppliers visible on first load
 /// This fixes suppliers with accountStatus: active but missing isActive: true
-void _runSupplierMigration() {
-  Future.microtask(() async {
-    try {
-      final migrationService = SupplierMigrationService();
-      final result = await migrationService.runMigration();
-      if (result.fixed > 0) {
-        Log.success('Supplier migration: fixed ${result.fixed} suppliers');
-      }
-    } catch (e) {
-      Log.warn('Supplier migration error (non-critical): $e');
+Future<void> _runSupplierMigration() async {
+  try {
+    final migrationService = SupplierMigrationService();
+    // Run with 5 second timeout to avoid blocking startup too long
+    final result = await migrationService.runMigration().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {
+        Log.warn('Supplier migration timed out - will retry on next launch');
+        return const MigrationResult(
+          success: false,
+          totalProcessed: 0,
+          fixed: 0,
+          alreadyCorrect: 0,
+          errors: 0,
+          messages: ['Timeout'],
+        );
+      },
+    );
+    if (result.fixed > 0) {
+      Log.success('Supplier migration: fixed ${result.fixed} suppliers');
     }
-  });
+  } catch (e) {
+    Log.warn('Supplier migration error (non-critical): $e');
+  }
 }
