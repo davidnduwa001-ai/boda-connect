@@ -27,8 +27,6 @@ class _SupplierAvailabilityScreenState
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     Future.microtask(() {
-      // UI-FIRST: Refresh supplier view projection (single source of truth)
-      ref.read(supplierViewProvider.notifier).refresh();
       // Set nav index to availability
       ref.read(supplierNavIndexProvider.notifier).state = SupplierNavTab.availability.tabIndex;
     });
@@ -41,18 +39,9 @@ class _SupplierAvailabilityScreenState
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    // Refresh projections when app comes back to foreground
-    if (state == AppLifecycleState.resumed) {
-      ref.read(supplierViewProvider.notifier).refresh();
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    // UI-FIRST: Use projection for everything (single source of truth)
-    final supplierViewState = ref.watch(supplierViewProvider);
+    // UI-FIRST: Use stream provider for real-time updates
+    final supplierViewAsync = ref.watch(supplierViewStreamProvider);
     final blockedDatesFromView = ref.watch(supplierBlockedDatesFromViewProvider);
 
     // Convert projection data to UI model
@@ -71,7 +60,7 @@ class _SupplierAvailabilityScreenState
             style: AppTextStyles.h3.copyWith(color: AppColors.gray900)),
         centerTitle: true,
       ),
-      body: supplierViewState.isLoading
+      body: supplierViewAsync.isLoading
           ? const Center(child: CircularProgressIndicator(color: AppColors.peach))
           : SingleChildScrollView(
               child: Column(
