@@ -79,16 +79,6 @@
       ]
     },
     {
-      "collectionGroup": "users",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "phone",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "escrow",
       "queryScope": "COLLECTION",
       "fields": [
