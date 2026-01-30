@@ -120,6 +120,19 @@ class EmailAuthService {
       // Update display name
       await user.updateDisplayName(name);
 
+      // IMPORTANT: Wait for auth token to propagate to Firestore
+      // This is needed especially on web where there can be a delay
+      debugPrint('⏳ Waiting for auth token to propagate...');
+      await user.reload();
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Get fresh ID token to ensure Firestore can authenticate
+      try {
+        await user.getIdToken(true);
+      } catch (e) {
+        debugPrint('⚠️ getIdToken failed (non-critical): $e');
+      }
+
       // Send email verification (but don't require it for testing)
       try {
         await user.sendEmailVerification();
