@@ -1,7 +1,11 @@
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 
-admin.initializeApp();
+// Initialize Firebase Admin only if not already initialized
+// (whatsapp_auth.ts and other modules may initialize it first)
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
 const db = admin.firestore();
 const messaging = admin.messaging();

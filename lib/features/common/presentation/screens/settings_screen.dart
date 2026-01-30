@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/constants/dimensions.dart';
 import '../../../../core/constants/text_styles.dart';
@@ -657,48 +661,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _showCacheDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Armazenamento e Cache'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Cache de Imagens: 45 MB',
-              style: AppTextStyles.body,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Dados Temporários: 12 MB',
-              style: AppTextStyles.body,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Total: 57 MB',
-              style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Fechar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Cache limpo com sucesso'),
-                  backgroundColor: AppColors.success,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.peach),
-            child: const Text('Limpar Cache'),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (context) => const _CacheManagementDialog(),
     );
   }
 
@@ -823,6 +787,334 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Cache Management Dialog with real cache calculations
+class _CacheManagementDialog extends StatefulWidget {
+  const _CacheManagementDialog();
+
+  @override
+  State<_CacheManagementDialog> createState() => _CacheManagementDialogState();
+}
+
+class _CacheManagementDialogState extends State<_CacheManagementDialog> {
+  bool _isLoading = true;
+  bool _isClearing = false;
+  int _imageCacheSize = 0;
+  int _tempDataSize = 0;
+  int _hiveCacheSize = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _calculateCacheSizes();
+  }
+
+  /// Calculate all cache sizes
+  Future<void> _calculateCacheSizes() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Calculate image cache size (cached_network_image stores in cache directory)
+      final cacheDir = await getTemporaryDirectory();
+      _imageCacheSize = await _getDirectorySize(cacheDir);
+
+      // Calculate app support/documents cache
+      final appSupportDir = await getApplicationSupportDirectory();
+      _hiveCacheSize = await _getDirectorySize(appSupportDir);
+
+      // Calculate temporary data (downloads, etc.)
+      if (!kIsWeb && Platform.isAndroid) {
+        try {
+          final externalCacheDir = await getExternalCacheDirectories();
+          if (externalCacheDir != null && externalCacheDir.isNotEmpty) {
+            _tempDataSize = await _getDirectorySize(externalCacheDir.first);
+          }
+        } catch (_) {
+          _tempDataSize = 0;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error calculating cache sizes: $e');
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Get size of a directory recursively
+  Future<int> _getDirectorySize(Directory dir) async {
+    int totalSize = 0;
+    try {
+      if (await dir.exists()) {
+        await for (final entity in dir.list(recursive: true, followLinks: false)) {
+          if (entity is File) {
+            try {
+              totalSize += await entity.length();
+            } catch (_) {
+              // Skip files that can't be read
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error getting directory size: $e');
+    }
+    return totalSize;
+  }
+
+  /// Format bytes to human readable string
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) {
+      return '$bytes B';
+    } else if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    } else if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    } else {
+      return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+    }
+  }
+
+  /// Clear all caches
+  Future<void> _clearAllCaches() async {
+    setState(() => _isClearing = true);
+
+    try {
+      // Clear cached_network_image cache
+      await DefaultCacheManager().emptyCache();
+
+      // Clear temporary directory
+      final tempDir = await getTemporaryDirectory();
+      if (await tempDir.exists()) {
+        await for (final entity in tempDir.list()) {
+          try {
+            if (entity is File) {
+              await entity.delete();
+            } else if (entity is Directory) {
+              await entity.delete(recursive: true);
+            }
+          } catch (e) {
+            debugPrint('Error deleting ${entity.path}: $e');
+          }
+        }
+      }
+
+      // Clear Hive boxes (re-open them after)
+      try {
+        await Hive.deleteFromDisk();
+        await Hive.initFlutter();
+      } catch (e) {
+        debugPrint('Error clearing Hive: $e');
+      }
+
+      // Clear external cache on Android
+      if (!kIsWeb && Platform.isAndroid) {
+        try {
+          final externalCacheDirs = await getExternalCacheDirectories();
+          if (externalCacheDirs != null) {
+            for (final dir in externalCacheDirs) {
+              if (await dir.exists()) {
+                await for (final entity in dir.list()) {
+                  try {
+                    if (entity is File) {
+                      await entity.delete();
+                    } else if (entity is Directory) {
+                      await entity.delete(recursive: true);
+                    }
+                  } catch (_) {}
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Recalculate sizes after clearing
+      await _calculateCacheSizes();
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cache limpo com sucesso'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao limpar cache: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isClearing = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalSize = _imageCacheSize + _tempDataSize + _hiveCacheSize;
+
+    return AlertDialog(
+      title: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.peach.withAlpha((0.1 * 255).toInt()),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.storage, color: AppColors.peach, size: 20),
+          ),
+          const SizedBox(width: 12),
+          const Text('Armazenamento e Cache'),
+        ],
+      ),
+      content: _isLoading
+          ? const SizedBox(
+              height: 120,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(color: AppColors.peach),
+                    SizedBox(height: 16),
+                    Text('A calcular tamanhos...'),
+                  ],
+                ),
+              ),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCacheItem(
+                  icon: Icons.image_outlined,
+                  label: 'Cache de Imagens',
+                  size: _imageCacheSize,
+                  color: Colors.blue,
+                ),
+                const SizedBox(height: 12),
+                _buildCacheItem(
+                  icon: Icons.folder_outlined,
+                  label: 'Dados do App',
+                  size: _hiveCacheSize,
+                  color: Colors.orange,
+                ),
+                const SizedBox(height: 12),
+                _buildCacheItem(
+                  icon: Icons.download_outlined,
+                  label: 'Dados Temporários',
+                  size: _tempDataSize,
+                  color: Colors.purple,
+                ),
+                const Divider(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Total',
+                      style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.peach.withAlpha((0.1 * 255).toInt()),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        _formatBytes(totalSize),
+                        style: AppTextStyles.body.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.peach,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (totalSize > 0) ...[
+                  const SizedBox(height: 16),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: 1.0,
+                      backgroundColor: AppColors.gray200,
+                      valueColor: const AlwaysStoppedAnimation<Color>(AppColors.peach),
+                      minHeight: 8,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Limpar o cache pode liberar espaço mas as imagens precisarão ser baixadas novamente.',
+                    style: AppTextStyles.caption.copyWith(color: AppColors.gray500),
+                  ),
+                ],
+              ],
+            ),
+      actions: [
+        TextButton(
+          onPressed: _isClearing ? null : () => Navigator.pop(context),
+          child: const Text('Fechar'),
+        ),
+        ElevatedButton.icon(
+          onPressed: _isLoading || _isClearing || totalSize == 0 ? null : _clearAllCaches,
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.peach),
+          icon: _isClearing
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.delete_outline, size: 18),
+          label: Text(_isClearing ? 'A limpar...' : 'Limpar Cache'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCacheItem({
+    required IconData icon,
+    required String label,
+    required int size,
+    required Color color,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color.withAlpha((0.1 * 255).toInt()),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(icon, color: color, size: 16),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(label, style: AppTextStyles.body),
+        ),
+        Text(
+          _formatBytes(size),
+          style: AppTextStyles.body.copyWith(
+            fontWeight: FontWeight.w500,
+            color: AppColors.gray700,
+          ),
+        ),
+      ],
     );
   }
 }
