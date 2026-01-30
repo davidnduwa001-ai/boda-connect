@@ -1057,7 +1057,7 @@ class _CacheManagementDialogState extends State<_CacheManagementDialog> {
                   const SizedBox(height: 8),
                   Text(
                     'Limpar o cache pode liberar espaço mas as imagens precisarão ser baixadas novamente.',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.gray500),
+                    style: AppTextStyles.caption.copyWith(color: AppColors.gray400),
                   ),
                 ],
               ],
