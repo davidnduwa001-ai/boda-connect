@@ -47,22 +47,30 @@ interface ConversationResponse {
  * Suppliers may have their document ID different from their auth UID
  */
 async function getSupplierDocumentId(authUid: string): Promise<string | null> {
+  console.log(`getSupplierDocumentId: Looking up supplier for authUid=${authUid}`);
+
   // First check if there's a supplier document with this ID directly
   const directDoc = await db.collection("suppliers").doc(authUid).get();
   if (directDoc.exists) {
+    console.log(`getSupplierDocumentId: Found direct match - suppliers/${authUid} exists`);
     return authUid;
   }
+  console.log(`getSupplierDocumentId: No direct match - suppliers/${authUid} does not exist`);
 
   // Check if there's a supplier document where userId matches auth UID
+  console.log(`getSupplierDocumentId: Querying for supplier with userId=${authUid}`);
   const supplierQuery = await db.collection("suppliers")
       .where("userId", "==", authUid)
       .limit(1)
       .get();
 
   if (!supplierQuery.empty) {
-    return supplierQuery.docs[0].id;
+    const docId = supplierQuery.docs[0].id;
+    console.log(`getSupplierDocumentId: Found supplier by userId query - doc ID=${docId}`);
+    return docId;
   }
 
+  console.log(`getSupplierDocumentId: No supplier found for authUid=${authUid}`);
   return null;
 }
 
@@ -74,14 +82,22 @@ async function isParticipant(
     conversationId: string,
     userId: string
 ): Promise<boolean> {
+  console.log(`isParticipant: Checking user=${userId} for conversation=${conversationId}`);
+
   // Get all possible IDs for this user (auth UID and possibly supplier document ID)
   const userIds = new Set<string>([userId]);
 
   // Check if user is a supplier with a different document ID
   const supplierDocId = await getSupplierDocumentId(userId);
-  if (supplierDocId && supplierDocId !== userId) {
-    userIds.add(supplierDocId);
-    console.log(`isParticipant: User ${userId} is supplier with document ID ${supplierDocId}`);
+  if (supplierDocId) {
+    if (supplierDocId !== userId) {
+      userIds.add(supplierDocId);
+      console.log(`isParticipant: User ${userId} is supplier with document ID ${supplierDocId}`);
+    } else {
+      console.log(`isParticipant: User ${userId} has supplier doc with same ID`);
+    }
+  } else {
+    console.log(`isParticipant: User ${userId} is not a supplier (no supplier doc found)`);
   }
 
   // Try conversations collection first
@@ -90,13 +106,26 @@ async function isParticipant(
     const participants = doc.data()?.participants as string[] || [];
     const clientId = doc.data()?.clientId as string | undefined;
     const supplierId = doc.data()?.supplierId as string | undefined;
+    console.log(`isParticipant: Found in conversations. participants=${JSON.stringify(participants)}, clientId=${clientId}, supplierId=${supplierId}`);
 
     // Check if any of the user's IDs match participants, clientId, or supplierId
     for (const id of userIds) {
-      if (participants.includes(id) || clientId === id || supplierId === id) {
+      if (participants.includes(id)) {
+        console.log(`isParticipant: MATCH - ${id} found in participants array`);
+        return true;
+      }
+      if (clientId === id) {
+        console.log(`isParticipant: MATCH - ${id} matches clientId`);
+        return true;
+      }
+      if (supplierId === id) {
+        console.log(`isParticipant: MATCH - ${id} matches supplierId`);
         return true;
       }
     }
+    console.log(`isParticipant: No match in conversations collection. User IDs checked: ${[...userIds].join(", ")}`);
+  } else {
+    console.log(`isParticipant: Conversation not found in conversations collection`);
   }
 
   // Fallback to chats collection (legacy)
@@ -105,16 +134,29 @@ async function isParticipant(
     const participants = doc.data()?.participants as string[] || [];
     const clientId = doc.data()?.clientId as string | undefined;
     const supplierId = doc.data()?.supplierId as string | undefined;
+    console.log(`isParticipant: Found in chats. participants=${JSON.stringify(participants)}, clientId=${clientId}, supplierId=${supplierId}`);
 
     // Check if any of the user's IDs match
     for (const id of userIds) {
-      if (participants.includes(id) || clientId === id || supplierId === id) {
+      if (participants.includes(id)) {
+        console.log(`isParticipant: MATCH - ${id} found in participants array (chats)`);
+        return true;
+      }
+      if (clientId === id) {
+        console.log(`isParticipant: MATCH - ${id} matches clientId (chats)`);
+        return true;
+      }
+      if (supplierId === id) {
+        console.log(`isParticipant: MATCH - ${id} matches supplierId (chats)`);
         return true;
       }
     }
+    console.log(`isParticipant: No match in chats collection. User IDs checked: ${[...userIds].join(", ")}`);
+  } else {
+    console.log(`isParticipant: Conversation not found in chats collection either`);
   }
 
-  console.log(`isParticipant: User ${userId} (IDs: ${[...userIds].join(", ")}) not found in conversation ${conversationId}`);
+  console.log(`isParticipant: FAILED - User ${userId} (IDs: ${[...userIds].join(", ")}) not found in conversation ${conversationId}`);
   return false;
 }
 
@@ -252,9 +294,11 @@ export const sendMessage = functions
 
       try {
         const senderId = context.auth.uid;
+        console.log(`sendMessage: Starting for sender=${senderId}, conversationId=${data.conversationId}`);
 
         // 3. Validate sender is participant
         const canSend = await isParticipant(data.conversationId, senderId);
+        console.log(`sendMessage: isParticipant result=${canSend}`);
         if (!canSend) {
           throw new functions.https.HttpsError(
               "permission-denied",
@@ -263,10 +307,14 @@ export const sendMessage = functions
         }
 
         // 4. Get sender info
+        console.log(`sendMessage: Getting sender info...`);
         const senderInfo = await getUserInfo(senderId);
+        console.log(`sendMessage: Sender info: name=${senderInfo.name}, isSupplier=${senderInfo.isSupplier}`);
 
         // 5. Get receiver ID
+        console.log(`sendMessage: Getting other participant...`);
         const receiverId = await getOtherParticipant(data.conversationId, senderId);
+        console.log(`sendMessage: Other participant receiverId=${receiverId}`);
         if (!receiverId) {
           throw new functions.https.HttpsError(
               "not-found",
@@ -309,6 +357,7 @@ export const sendMessage = functions
         }
 
         // 7. Write message - try conversations first, fallback to chats
+        console.log(`sendMessage: Finding conversation document...`);
         let messagesRef: FirebaseFirestore.CollectionReference;
         let conversationRef: FirebaseFirestore.DocumentReference;
 
@@ -318,15 +367,19 @@ export const sendMessage = functions
             .get();
 
         if (convDoc.exists) {
+          console.log(`sendMessage: Found in conversations collection`);
           conversationRef = db.collection("conversations").doc(data.conversationId);
           messagesRef = conversationRef.collection("messages");
         } else {
+          console.log(`sendMessage: Not in conversations, using chats collection`);
           conversationRef = db.collection("chats").doc(data.conversationId);
           messagesRef = conversationRef.collection("messages");
         }
 
         // Add the message
+        console.log(`sendMessage: Adding message to collection...`);
         const messageRef = await messagesRef.add(messageData);
+        console.log(`sendMessage: Message added with ID=${messageRef.id}`);
 
         // 8. Update conversation with last message
         const lastMessagePreview = messageType === "text" ?
@@ -335,6 +388,7 @@ export const sendMessage = functions
           messageType === "quote" ? "💰 Orçamento" :
           messageType === "file" ? "📎 Arquivo" : "";
 
+        console.log(`sendMessage: Updating conversation...`);
         await conversationRef.update({
           lastMessage: lastMessagePreview,
           lastMessageAt: now,
@@ -345,7 +399,7 @@ export const sendMessage = functions
         });
 
         console.log(
-            `sendMessage: Message ${messageRef.id} sent in conversation ${data.conversationId}`
+            `sendMessage: SUCCESS - Message ${messageRef.id} sent in conversation ${data.conversationId}`
         );
 
         return {
@@ -353,7 +407,16 @@ export const sendMessage = functions
           messageId: messageRef.id,
         };
       } catch (error) {
-        console.error("Error in sendMessage:", error);
+        // Log detailed error information
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        console.error("sendMessage ERROR:", {
+          error: errorMessage,
+          stack: errorStack,
+          conversationId: data.conversationId,
+          senderId: context.auth?.uid,
+          type: data.type,
+        });
 
         if (error instanceof functions.https.HttpsError) {
           throw error;
@@ -361,7 +424,7 @@ export const sendMessage = functions
 
         throw new functions.https.HttpsError(
             "internal",
-            "Erro ao enviar mensagem"
+            `Erro ao enviar mensagem: ${errorMessage}`
         );
       }
     });
