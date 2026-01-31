@@ -1659,14 +1659,6 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     );
   }
 
-  /// Format price with thousand separators
-  String _formatPrice(int price) {
-    return price.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]}.',
-    );
-  }
-
   Widget _buildMessageInput() {
     final isEnabled = !_isLoadingConversation;
     final currentUser = ref.watch(currentUserProvider);
