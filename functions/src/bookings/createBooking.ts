@@ -42,6 +42,9 @@ interface CreateBookingRequest {
   eventLocation?: string;
   guestCount?: number;
   clientRequestId?: string; // For idempotency
+  totalPrice?: number; // Custom price (for custom offers)
+  packageName?: string; // Custom package name (for custom offers)
+  selectedCustomizations?: string[]; // Selected customization IDs
 }
 
 interface CreateBookingResponse {
@@ -425,18 +428,24 @@ export const createBooking = functions
               }
 
               // 8. Validate package exists and belongs to supplier
-              const packageDoc = await db
-                  .collection("suppliers")
-                  .doc(data.supplierId)
-                  .collection("packages")
-                  .doc(data.packageId)
-                  .get();
+              // Custom offers have packageId starting with 'custom_offer_' and don't have a real package
+              const isCustomOffer = data.packageId.startsWith("custom_offer_");
+              let packageData: {name?: string; price?: number} = {};
 
-              if (!packageDoc.exists) {
-                throw Errors.notFound(errorContext, "Pacote", data.packageId);
+              if (!isCustomOffer) {
+                const packageDoc = await db
+                    .collection("suppliers")
+                    .doc(data.supplierId)
+                    .collection("packages")
+                    .doc(data.packageId)
+                    .get();
+
+                if (!packageDoc.exists) {
+                  throw Errors.notFound(errorContext, "Pacote", data.packageId);
+                }
+
+                packageData = packageDoc.data()!;
               }
-
-              const packageData = packageDoc.data()!;
 
               // 9. Atomic conflict check (existing bookings on same date)
               const hasConflict = await hasBookingConflict(
@@ -470,6 +479,10 @@ export const createBooking = functions
               );
               const eventDateTimestamp = admin.firestore.Timestamp.fromDate(eventDateObj);
 
+              // Determine the final price: use custom totalPrice if provided, otherwise use package price
+              const finalPrice = data.totalPrice ?? packageData.price ?? 0;
+              const finalPackageName = data.packageName || packageData.name || "Pacote";
+
               const bookingData = {
                 id: bookingRef.id,
                 clientId: clientId,
@@ -480,8 +493,8 @@ export const createBooking = functions
                 supplierName: supplier.businessName || supplier.name || "Fornecedor",
                 supplierPhone: supplier.phone || "",
                 packageId: data.packageId,
-                packageName: packageData.name || "Pacote",
-                packagePrice: packageData.price || 0,
+                packageName: finalPackageName,
+                packagePrice: finalPrice,
                 eventDate: eventDateTimestamp,
                 eventTime: data.startTime || null,
                 startTime: data.startTime || null,
@@ -491,7 +504,7 @@ export const createBooking = functions
                 guestCount: data.guestCount || null,
                 notes: data.notes || null,
                 status: "pending",
-                totalAmount: packageData.price || 0,
+                totalAmount: finalPrice,
                 paidAmount: 0,
                 platformFee: 0,
                 supplierEarnings: 0,
@@ -499,6 +512,7 @@ export const createBooking = functions
                 updatedAt: now,
                 createdBy: "cloud_function",
                 clientRequestId: data.clientRequestId || null,
+                isCustomOffer: isCustomOffer,
               };
 
               await bookingRef.set(bookingData);
