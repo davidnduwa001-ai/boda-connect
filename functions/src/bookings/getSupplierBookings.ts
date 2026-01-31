@@ -579,6 +579,25 @@ export const respondToBooking = functions
 
         await bookingRef.update(updates);
 
+        // 8.5 If rejecting, remove any blocked_dates entry for this booking
+        if (data.action === "reject") {
+          const blockedDatesQuery = await db
+              .collection("suppliers")
+              .doc(supplierId)
+              .collection("blocked_dates")
+              .where("bookingId", "==", data.bookingId)
+              .get();
+
+          if (!blockedDatesQuery.empty) {
+            const batch = db.batch();
+            blockedDatesQuery.docs.forEach((doc) => {
+              batch.delete(doc.ref);
+            });
+            await batch.commit();
+            console.log(`Deleted ${blockedDatesQuery.size} blocked_dates entries for rejected booking ${data.bookingId}`);
+          }
+        }
+
         // 9. Create audit log
         await db.collection("audit_logs").add({
           category: "booking",

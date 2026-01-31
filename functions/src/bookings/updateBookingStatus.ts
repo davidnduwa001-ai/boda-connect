@@ -176,6 +176,34 @@ export const updateBookingStatus = functions
           }
         }
 
+        // 9.5 Unblock date when booking is cancelled
+        if (data.newStatus === "cancelled") {
+          try {
+            const blockedDatesQuery = await db
+                .collection("suppliers")
+                .doc(booking.supplierId)
+                .collection("blocked_dates")
+                .where("bookingId", "==", data.bookingId)
+                .get();
+
+            if (!blockedDatesQuery.empty) {
+              const batch = db.batch();
+              blockedDatesQuery.docs.forEach((doc) => {
+                batch.delete(doc.ref);
+              });
+              await batch.commit();
+              console.log(
+                  `Deleted ${blockedDatesQuery.size} blocked_dates entries for cancelled booking ${data.bookingId}`
+              );
+            }
+          } catch (unblockError) {
+            console.error(
+                `Error unblocking date for booking ${data.bookingId}:`,
+                unblockError
+            );
+          }
+        }
+
         // 10. Handle escrow operations based on new status
         if (data.newStatus === "completed") {
           // When booking is completed, mark escrow service as completed
