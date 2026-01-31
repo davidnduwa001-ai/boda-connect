@@ -11,6 +11,7 @@ import '../../../../core/constants/text_styles.dart';
 import '../../../../core/routing/route_names.dart';
 import '../../../../core/models/booking_model.dart';
 import '../../../../core/widgets/loading_widget.dart';
+import '../../../../core/providers/supplier_view_provider.dart';
 
 class SupplierOrderDetailScreen extends ConsumerStatefulWidget {
   final BookingModel? booking;
@@ -916,6 +917,8 @@ class _SupplierOrderDetailScreenState
           backgroundColor: AppColors.success,
         ),
       );
+      // Refresh the supplier view to update the booking list
+      ref.read(supplierViewProvider.notifier).refresh();
       await _loadBooking();
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
@@ -958,6 +961,8 @@ class _SupplierOrderDetailScreenState
           backgroundColor: AppColors.success,
         ),
       );
+      // Refresh the supplier view to update the booking list
+      ref.read(supplierViewProvider.notifier).refresh();
       await _loadBooking();
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
@@ -1000,6 +1005,8 @@ class _SupplierOrderDetailScreenState
           backgroundColor: AppColors.success,
         ),
       );
+      // Refresh the supplier view to update the booking list
+      ref.read(supplierViewProvider.notifier).refresh();
       await _loadBooking();
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
@@ -1135,6 +1142,8 @@ class _SupplierOrderDetailScreenState
           backgroundColor: AppColors.warning,
         ),
       );
+      // Refresh the supplier view to update the booking list
+      ref.read(supplierViewProvider.notifier).refresh();
       context.pop();
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
@@ -1176,6 +1185,8 @@ class _SupplierOrderDetailScreenState
           backgroundColor: AppColors.error,
         ),
       );
+      // Refresh the supplier view to update the booking list
+      ref.read(supplierViewProvider.notifier).refresh();
       context.pop();
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
