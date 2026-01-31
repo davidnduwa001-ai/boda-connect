@@ -12,6 +12,7 @@
  * 3. "rps" method -> ProxyPayRPSProvider
  */
 
+import * as functions from "firebase-functions/v1";
 import {PaymentProvider, PaymentProviderType} from "./PaymentProvider";
 import {getStripeProvider} from "./StripeProvider";
 import {getProxyPayOPGProvider, getProxyPayRPSProvider} from "./ProxyPayProvider";
@@ -26,10 +27,25 @@ export type PaymentMethodInput = "opg" | "rps" | "stripe";
 
 /**
  * Check if Stripe is enabled (test mode only)
+ * Checks both process.env and functions.config() for flexibility
  */
 function isStripeEnabled(): boolean {
-  const enabled = process.env.STRIPE_ENABLED === "true";
-  const hasKey = !!process.env.STRIPE_SECRET_KEY;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const config = (functions as any).config?.() || {};
+  const stripeConfig = config.stripe || {};
+
+  // Check process.env first (for .env files)
+  const envEnabled = process.env.STRIPE_ENABLED === "true";
+  const envHasKey = !!process.env.STRIPE_SECRET_KEY;
+
+  // Check functions.config() as fallback
+  const configEnabled = stripeConfig.enabled === "true";
+  const configHasKey = !!stripeConfig.secret_key;
+
+  const enabled = envEnabled || configEnabled;
+  const hasKey = envHasKey || configHasKey;
+
+  logger.debug("stripe_enabled_check", {envEnabled, envHasKey, configEnabled, configHasKey});
 
   return enabled && hasKey;
 }
