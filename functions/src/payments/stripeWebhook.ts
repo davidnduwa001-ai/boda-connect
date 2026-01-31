@@ -253,7 +253,7 @@ export const stripeWebhook = functions
                 try {
                   // Validate amount before using
                   if (typeof event.amount !== "number" || !Number.isFinite(event.amount) || event.amount < 0) {
-                    logger.error("invalid_event_amount", {
+                    logger.error("invalid_event_amount", `Invalid amount: ${event.amount} (type: ${typeof event.amount})`, {
                       amount: event.amount,
                       type: typeof event.amount,
                       paymentId: payment.id,
