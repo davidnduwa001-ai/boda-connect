@@ -253,6 +253,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
                     isFlagged: false,
                     type: entity.type.name,
                     quoteData: quoteDataMap,
+                    imageUrl: entity.imageUrl,
                   );
                 }).toList();
 
@@ -1409,6 +1410,11 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
       return _buildProposalCard(message);
     }
 
+    // Special rendering for image messages
+    if (message.isImage) {
+      return _buildImageMessage(message);
+    }
+
     return Align(
       alignment: message.isFromMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -1656,6 +1662,145 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     // TODO: Implement reject proposal flow
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Funcionalidade de rejeitar proposta em desenvolvimento')),
+    );
+  }
+
+  /// Build an image message bubble
+  Widget _buildImageMessage(ChatMessage message) {
+    return Align(
+      alignment: message.isFromMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppDimensions.sm),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
+        decoration: BoxDecoration(
+          color: message.isFromMe ? AppColors.peach : AppColors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(message.isFromMe ? 16 : 4),
+            bottomRight: Radius.circular(message.isFromMe ? 4 : 16),
+          ),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 5, offset: const Offset(0, 2))],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(message.isFromMe ? 16 : 4),
+            bottomRight: Radius.circular(message.isFromMe ? 4 : 16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Image
+              GestureDetector(
+                onTap: () => _showFullScreenImage(message.imageUrl!),
+                child: Image.network(
+                  message.imageUrl!,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      height: 200,
+                      color: AppColors.gray100,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                              : null,
+                          color: AppColors.peach,
+                        ),
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      height: 200,
+                      color: AppColors.gray100,
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.broken_image, color: AppColors.gray400, size: 48),
+                            SizedBox(height: 8),
+                            Text('Erro ao carregar imagem', style: TextStyle(color: AppColors.gray400)),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // Timestamp
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _formatTime(message.timestamp),
+                      style: AppTextStyles.caption.copyWith(
+                        color: message.isFromMe ? AppColors.white.withValues(alpha: 0.7) : AppColors.textSecondary,
+                        fontSize: 10,
+                      ),
+                    ),
+                    if (message.isFromMe) ...[
+                      const SizedBox(width: 4),
+                      Icon(Icons.done_all, size: 14, color: AppColors.white.withValues(alpha: 0.7)),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Show image in full screen
+  void _showFullScreenImage(String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Background
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(color: Colors.black87),
+            ),
+            // Image
+            InteractiveViewer(
+              child: Center(
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const Center(
+                      child: CircularProgressIndicator(color: AppColors.white),
+                    );
+                  },
+                ),
+              ),
+            ),
+            // Close button
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 16,
+              right: 16,
+              child: IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close, color: AppColors.white, size: 32),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -2386,6 +2531,7 @@ class ChatMessage {
     this.isFlagged = false,
     this.type = 'text',
     this.quoteData,
+    this.imageUrl,
   });
   final String id;
   final String text;
@@ -2394,8 +2540,10 @@ class ChatMessage {
   final bool isFlagged;
   final String type;
   final Map<String, dynamic>? quoteData;
+  final String? imageUrl;
 
   bool get isQuote => type == 'quote';
+  bool get isImage => type == 'image' && imageUrl != null;
 }
 
 enum ProposalStatus { pending, accepted, rejected }
