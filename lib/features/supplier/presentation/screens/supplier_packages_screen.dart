@@ -76,10 +76,10 @@ class _SupplierPackagesScreenState extends ConsumerState<SupplierPackagesScreen>
     final total = packages.length;
     final active = packages.where((p) => p.isActive).length;
 
-    // Calculate reservations from bookings
+    // Calculate reservations from bookings (exclude cancelled and rejected)
     final bookings = ref.watch(supplierBookingsProvider);
     final reservations = bookings
-        .where((b) => b.status != BookingStatus.cancelled)
+        .where((b) => b.status != BookingStatus.cancelled && b.status != BookingStatus.rejected)
         .length;
 
     return Container(
@@ -177,10 +177,12 @@ class _SupplierPackagesScreenState extends ConsumerState<SupplierPackagesScreen>
   }
 
   Widget _buildPackageCard(PackageModel package) {
-    // Calculate reservations for this specific package
+    // Calculate reservations for this specific package (exclude cancelled and rejected)
     final bookings = ref.watch(supplierBookingsProvider);
     final packageReservations = bookings
-        .where((b) => b.packageId == package.id && b.status != BookingStatus.cancelled)
+        .where((b) => b.packageId == package.id &&
+                      b.status != BookingStatus.cancelled &&
+                      b.status != BookingStatus.rejected)
         .length;
 
     return Container(

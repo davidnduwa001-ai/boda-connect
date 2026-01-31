@@ -13,7 +13,9 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 class SupplierCreateServiceScreen extends ConsumerStatefulWidget {
-  const SupplierCreateServiceScreen({super.key});
+  final PackageModel? packageToEdit;
+
+  const SupplierCreateServiceScreen({super.key, this.packageToEdit});
 
   @override
   ConsumerState<SupplierCreateServiceScreen> createState() =>
@@ -44,6 +46,11 @@ class _SupplierCreateServiceScreenState
   final List<({XFile file, Uint8List bytes})> _selectedImages = [];
   bool _isUploading = false;
 
+  // Editing mode
+  PackageModel? _editingPackage;
+  bool get _isEditing => _editingPackage != null;
+  List<String> _existingPhotoUrls = [];
+
   @override
   void initState() {
     super.initState();
@@ -70,6 +77,43 @@ class _SupplierCreateServiceScreenState
       }
 
       _autoSelectSupplierCategory();
+
+      // Check if editing an existing package (from widget parameter or router extra)
+      final packageFromWidget = widget.packageToEdit;
+      final routerExtra = GoRouterState.of(context).extra;
+      final packageToEdit = packageFromWidget ?? (routerExtra is PackageModel ? routerExtra : null);
+
+      if (packageToEdit != null && mounted) {
+        _populateFormForEditing(packageToEdit);
+      }
+    });
+  }
+
+  /// Populate form fields with existing package data for editing
+  void _populateFormForEditing(PackageModel package) {
+    setState(() {
+      _editingPackage = package;
+      _nameController.text = package.name;
+      _descriptionController.text = package.description;
+      _priceController.text = package.price.toString();
+      _durationController.text = package.duration;
+
+      // Populate included items
+      _includedItems.clear();
+      _includedItems.addAll(package.includes);
+
+      // Populate customizations
+      _customizations.clear();
+      for (final customization in package.customizations) {
+        _customizations.add({
+          'name': customization.name,
+          'price': customization.price,
+          'description': customization.description,
+        });
+      }
+
+      // Store existing photo URLs
+      _existingPhotoUrls = List.from(package.photos);
     });
   }
 
@@ -208,8 +252,8 @@ class _SupplierCreateServiceScreenState
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Criar Serviço', style: AppTextStyles.h3),
-              Text('Configure seu novo serviço',
+              Text(_isEditing ? 'Editar Serviço' : 'Criar Serviço', style: AppTextStyles.h3),
+              Text(_isEditing ? 'Atualize os detalhes do serviço' : 'Configure seu novo serviço',
                   style: AppTextStyles.caption
                       .copyWith(color: AppColors.textSecondary)),
             ],
@@ -711,6 +755,8 @@ class _SupplierCreateServiceScreenState
   }
 
   Widget _buildPhotosSection() {
+    final totalPhotos = _existingPhotoUrls.length + _selectedImages.length;
+
     return Container(
       margin: const EdgeInsets.all(AppDimensions.md),
       padding: const EdgeInsets.all(AppDimensions.md),
@@ -725,15 +771,77 @@ class _SupplierCreateServiceScreenState
             children: [
               const Icon(Icons.photo_library_outlined, color: AppColors.peach),
               const SizedBox(width: 8),
-              Text('Fotos do Serviço *',
+              Text('Fotos do Serviço ${_isEditing ? '' : '*'}',
                   style: AppTextStyles.bodyLarge
                       .copyWith(fontWeight: FontWeight.w600)),
             ],
           ),
           const SizedBox(height: AppDimensions.md),
 
-          // Selected images grid
+          // Existing photos grid (when editing)
+          if (_existingPhotoUrls.isNotEmpty) ...[
+            Text('Fotos existentes',
+                style: AppTextStyles.caption
+                    .copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: 8),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+              ),
+              itemCount: _existingPhotoUrls.length,
+              itemBuilder: (context, index) {
+                return Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        _existingPhotoUrls[index],
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: AppColors.gray200,
+                          child: const Icon(Icons.broken_image, color: AppColors.gray400),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _existingPhotoUrls.removeAt(index)),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // Selected new images grid
           if (_selectedImages.isNotEmpty) ...[
+            if (_existingPhotoUrls.isNotEmpty)
+              Text('Novas fotos',
+                  style: AppTextStyles.caption
+                      .copyWith(color: AppColors.textSecondary)),
+            if (_existingPhotoUrls.isNotEmpty) const SizedBox(height: 8),
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -1090,11 +1198,11 @@ class _SupplierCreateServiceScreenState
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Text('A criar serviço...',
+                    Text(_isEditing ? 'A atualizar serviço...' : 'A criar serviço...',
                         style: AppTextStyles.button.copyWith(color: AppColors.white)),
                   ],
                 )
-              : Text('Criar Serviço',
+              : Text(_isEditing ? 'Atualizar Serviço' : 'Criar Serviço',
                   style: AppTextStyles.button.copyWith(color: AppColors.white)),
         ),
       ),
@@ -1247,43 +1355,70 @@ class _SupplierCreateServiceScreenState
       // Parse price
       final price = int.tryParse(_priceController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
 
-      // Create package in Firestore first
-      final packageId = await ref.read(supplierProvider.notifier).createPackage(
-        name: _nameController.text.trim(),
-        description: _descriptionController.text.trim(),
-        price: price,
-        duration: _durationController.text.trim(),
-        includes: _includedItems,
-        customizations: _customizations.map((c) => PackageCustomization(
-          name: c['name'] ?? '',
-          price: (c['price'] as num?)?.toInt() ?? 0,
-          description: c['description'] as String?,
-        )).toList(),
-      );
+      String packageId;
 
-      if (packageId == null) {
-        throw Exception('Falha ao criar pacote');
+      if (_isEditing) {
+        // Update existing package
+        packageId = _editingPackage!.id;
+        final success = await ref.read(supplierProvider.notifier).updatePackage(packageId, {
+          'name': _nameController.text.trim(),
+          'description': _descriptionController.text.trim(),
+          'price': price,
+          'duration': _durationController.text.trim(),
+          'includes': _includedItems,
+          'customizations': _customizations.map((c) => {
+            'name': c['name'] ?? '',
+            'price': (c['price'] as num?)?.toInt() ?? 0,
+            'description': c['description'] as String?,
+          }).toList(),
+        });
+
+        if (!success) {
+          throw Exception('Falha ao atualizar pacote');
+        }
+      } else {
+        // Create new package in Firestore first
+        final newPackageId = await ref.read(supplierProvider.notifier).createPackage(
+          name: _nameController.text.trim(),
+          description: _descriptionController.text.trim(),
+          price: price,
+          duration: _durationController.text.trim(),
+          includes: _includedItems,
+          customizations: _customizations.map((c) => PackageCustomization(
+            name: c['name'] ?? '',
+            price: (c['price'] as num?)?.toInt() ?? 0,
+            description: c['description'] as String?,
+          )).toList(),
+        );
+
+        if (newPackageId == null) {
+          throw Exception('Falha ao criar pacote');
+        }
+        packageId = newPackageId;
       }
 
-      // Upload images to Firebase Storage using package ID
-      List<String> photoUrls = [];
+      // Upload new images to Firebase Storage using package ID
+      List<String> newPhotoUrls = [];
       if (_selectedImages.isNotEmpty) {
         final repository = ref.read(supplierRepositoryProvider);
         for (final imageData in _selectedImages) {
           try {
             final url = await repository.uploadPackagePhoto(packageId, imageData.file);
-            photoUrls.add(url);
+            newPhotoUrls.add(url);
           } catch (e) {
             debugPrint('Error uploading photo: $e');
           }
         }
+      }
 
-        // Update package with uploaded photo URLs
-        if (photoUrls.isNotEmpty) {
-          await ref.read(supplierProvider.notifier).updatePackage(packageId, {
-            'photos': photoUrls,
-          });
-        }
+      // Combine existing and new photo URLs
+      final allPhotoUrls = [..._existingPhotoUrls, ...newPhotoUrls];
+
+      // Update package with all photo URLs if there are any changes
+      if (newPhotoUrls.isNotEmpty || (_isEditing && allPhotoUrls.length != _editingPackage!.photos.length)) {
+        await ref.read(supplierProvider.notifier).updatePackage(packageId, {
+          'photos': allPhotoUrls,
+        });
       }
 
       setState(() {
@@ -1308,10 +1443,12 @@ class _SupplierCreateServiceScreenState
                   child: const Icon(Icons.check, color: AppColors.success, size: 48),
                 ),
                 const SizedBox(height: 24),
-                Text('Serviço Criado!', style: AppTextStyles.h3),
+                Text(_isEditing ? 'Serviço Atualizado!' : 'Serviço Criado!', style: AppTextStyles.h3),
                 const SizedBox(height: 8),
                 Text(
-                  'Seu novo serviço foi adicionado com sucesso.',
+                  _isEditing
+                      ? 'Seu serviço foi atualizado com sucesso.'
+                      : 'Seu novo serviço foi adicionado com sucesso.',
                   style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
                   textAlign: TextAlign.center,
                 ),
@@ -1333,7 +1470,7 @@ class _SupplierCreateServiceScreenState
           ),
         );
       } else {
-        throw Exception('Falha ao criar serviço');
+        throw Exception(_isEditing ? 'Falha ao atualizar serviço' : 'Falha ao criar serviço');
       }
     } catch (e) {
       setState(() {
@@ -1343,7 +1480,7 @@ class _SupplierCreateServiceScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao criar serviço: $e'),
+            content: Text(_isEditing ? 'Erro ao atualizar serviço: $e' : 'Erro ao criar serviço: $e'),
             backgroundColor: Colors.red,
           ),
         );

@@ -331,7 +331,11 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: Routes.supplierCreateService,
-      builder: (context, state) => const SupplierCreateServiceScreen(),
+      builder: (context, state) {
+        // Check if a package was passed for editing
+        final packageToEdit = state.extra is PackageModel ? state.extra as PackageModel : null;
+        return SupplierCreateServiceScreen(packageToEdit: packageToEdit);
+      },
     ),
     GoRoute(
       path: Routes.supplierPaymentMethods,
