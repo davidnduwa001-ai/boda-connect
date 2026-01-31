@@ -430,12 +430,11 @@ export const createBooking = functions
               // 8. Validate package exists and belongs to supplier
               // Custom offers have packageId starting with 'custom_offer_' and don't have a real package
               const isCustomOffer = data.packageId.startsWith("custom_offer_");
-              let packageData: {name?: string; price?: number} = {};
+              let packageData: {name?: string; price?: number; supplierId?: string} = {};
 
               if (!isCustomOffer) {
+                // Packages are stored in top-level 'packages' collection with supplierId field
                 const packageDoc = await db
-                    .collection("suppliers")
-                    .doc(data.supplierId)
                     .collection("packages")
                     .doc(data.packageId)
                     .get();
@@ -445,6 +444,14 @@ export const createBooking = functions
                 }
 
                 packageData = packageDoc.data()!;
+
+                // Verify the package belongs to the specified supplier
+                if (packageData.supplierId !== data.supplierId) {
+                  throw Errors.permissionDenied(
+                      errorContext,
+                      "Este pacote não pertence ao fornecedor especificado"
+                  );
+                }
               }
 
               // 9. Atomic conflict check (existing bookings on same date)
