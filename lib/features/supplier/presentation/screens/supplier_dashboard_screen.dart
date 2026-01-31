@@ -572,7 +572,8 @@ class _SupplierDashboardScreenState extends ConsumerState<SupplierDashboardScree
             ),
           )
         else
-          ...recentOrders.map((booking) => _buildOrderCard(
+          // Show only 5 recent orders on dashboard, "Ver todos" shows all
+          ...recentOrders.take(5).map((booking) => _buildOrderCard(
             booking: booking,
             name: booking.clientName,
             event: booking.eventName,
