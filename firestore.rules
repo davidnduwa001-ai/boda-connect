@@ -600,23 +600,51 @@ service cloud.firestore {
 
     // Custom offers collection
     match /custom_offers/{offerId} {
+      // Helper to check if user's supplier doc ID is in chat participants
+      function isSupplierInOfferChatParticipants() {
+        let chatDoc = get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data;
+        return chatDoc.participants.size() >= 1 &&
+          (
+            (exists(/databases/$(database)/documents/suppliers/$(chatDoc.participants[0])) &&
+             get(/databases/$(database)/documents/suppliers/$(chatDoc.participants[0])).data.userId == request.auth.uid) ||
+            (chatDoc.participants.size() >= 2 &&
+             exists(/databases/$(database)/documents/suppliers/$(chatDoc.participants[1])) &&
+             get(/databases/$(database)/documents/suppliers/$(chatDoc.participants[1])).data.userId == request.auth.uid)
+          );
+      }
+
+      // Check if user owns a supplier whose document ID is the sellerId
+      function isSellerOwner() {
+        return exists(/databases/$(database)/documents/suppliers/$(resource.data.sellerId)) &&
+          get(/databases/$(database)/documents/suppliers/$(resource.data.sellerId)).data.userId == request.auth.uid;
+      }
+
       // Allow reading if user is seller, buyer, or part of the chat (including supplier owner)
       // Allow query evaluation by checking resource == null for non-existent documents
       allow read: if request.auth != null &&
         (resource == null ||  // Document doesn't exist - allow query evaluation
          request.auth.uid == resource.data.sellerId ||
          request.auth.uid == resource.data.buyerId ||
+         isSellerOwner() ||
          (resource.data.keys().hasAny(['chatId']) &&
           (request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants ||
            request.auth.uid == get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.clientId ||
            (get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.keys().hasAny(['supplierId']) &&
-            isSupplierOwner(get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.supplierId)))));
+            isSupplierOwner(get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.supplierId)) ||
+           isSupplierInOfferChatParticipants())));
+
+      // Allow create if user is seller (auth UID) or owns the seller's supplier doc
       allow create: if request.auth != null &&
         (request.auth.uid == request.resource.data.sellerId ||
-         request.auth.uid == request.resource.data.buyerId);
+         request.auth.uid == request.resource.data.buyerId ||
+         (exists(/databases/$(database)/documents/suppliers/$(request.resource.data.sellerId)) &&
+          get(/databases/$(database)/documents/suppliers/$(request.resource.data.sellerId)).data.userId == request.auth.uid));
+
+      // Allow update if user is seller (auth UID), buyer, or owns the seller's supplier doc
       allow update: if request.auth != null &&
         (request.auth.uid == resource.data.sellerId ||
-         request.auth.uid == resource.data.buyerId);
+         request.auth.uid == resource.data.buyerId ||
+         isSellerOwner());
       allow delete: if false;
     }
 
