@@ -349,6 +349,50 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
     return daysSinceJoined <= 90;
   }
 
+  /// Get valid description, filtering out debugging text or empty values
+  String _getValidDescription(SupplierModel supplier) {
+    final desc = supplier.description.trim();
+
+    // Check for empty or very short descriptions
+    if (desc.isEmpty || desc.length < 10) {
+      return 'Fornecedor de ${supplier.category} em ${supplier.location?.city ?? 'Angola'}. Entre em contacto para mais informações sobre os serviços oferecidos.';
+    }
+
+    // Check for common debugging/technical patterns that shouldn't be in descriptions
+    final invalidPatterns = [
+      'auth state',
+      'firestore',
+      'firebase',
+      'document not found',
+      'cache was persisting',
+      'race condition',
+      'debug',
+      'error:',
+      'exception',
+      'null pointer',
+      'undefined',
+      'todo:',
+      'fixme',
+    ];
+
+    final lowerDesc = desc.toLowerCase();
+    for (final pattern in invalidPatterns) {
+      if (lowerDesc.contains(pattern)) {
+        return 'Fornecedor de ${supplier.category} em ${supplier.location?.city ?? 'Angola'}. Entre em contacto para mais informações sobre os serviços oferecidos.';
+      }
+    }
+
+    return desc;
+  }
+
+  /// Get description for sharing, with validation and truncation
+  String _getShareDescription(SupplierModel supplier) {
+    final desc = _getValidDescription(supplier);
+    if (desc.isEmpty) return '';
+    final truncated = desc.length > 200 ? '${desc.substring(0, 200)}...' : desc;
+    return '📋 Sobre:\n$truncated\n';
+  }
+
   Widget _buildBadge(String text, IconData icon, Color color, Color bgColor) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -412,7 +456,7 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
           const Text('Descrição', style: AppTextStyles.h3),
           const SizedBox(height: AppDimensions.sm),
           Text(
-            supplier.description,
+            _getValidDescription(supplier),
             style: AppTextStyles.body.copyWith(
               color: AppColors.textSecondary,
               height: 1.6,
@@ -2248,7 +2292,7 @@ $ratingText
 
 🔖 Categoria: $categories
 
-${supplier.description.isNotEmpty ? '📋 Sobre:\n${supplier.description.length > 200 ? '${supplier.description.substring(0, 200)}...' : supplier.description}\n' : ''}
+${_getShareDescription(supplier)}
 ${supplier.isVerified ? '✅ Fornecedor verificado\n' : ''}
 $phoneText📱 Baixe o Boda Connect e entre em contato!
 $linkText
