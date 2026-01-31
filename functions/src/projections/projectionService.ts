@@ -131,6 +131,9 @@ export async function rebuildClientView(
     // Get unread message count
     const unreadMessages = await getUnreadMessageCount(clientId, "client");
 
+    // Get unread notification count
+    const unreadNotifications = await getUnreadNotificationCount(clientId);
+
     // Get payment summary
     const paymentSummary = await getClientPaymentSummary(clientId);
 
@@ -159,7 +162,7 @@ export async function rebuildClientView(
       upcomingEvents,
       unreadCounts: {
         messages: unreadMessages,
-        notifications: 0,
+        notifications: unreadNotifications,
       },
       paymentSummary,
       cartItemCount: cartSnapshot.size,
@@ -377,8 +380,16 @@ export async function rebuildSupplierView(
     // Get dashboard stats
     const dashboardStats = buildDashboardStats(allBookings, supplierData);
 
-    // Get unread message count
-    const unreadMessages = await getUnreadMessageCount(supplierId, "supplier");
+    // Get unread message count (check both supplierId formats)
+    let unreadMessages = await getUnreadMessageCount(supplierId, "supplier");
+    if (supplierAuthUid && supplierAuthUid !== supplierId) {
+      unreadMessages += await getUnreadMessageCount(supplierAuthUid, "supplier");
+    }
+
+    // Get unread notification count (notifications are sent to auth UID)
+    const unreadNotifications = supplierAuthUid
+      ? await getUnreadNotificationCount(supplierAuthUid)
+      : 0;
 
     // Get earnings summary
     const earningsSummary = await getSupplierEarningsSummary(supplierId);
@@ -412,7 +423,7 @@ export async function rebuildSupplierView(
       upcomingEvents,
       unreadCounts: {
         messages: unreadMessages,
-        notifications: 0,
+        notifications: unreadNotifications,
         pendingBookings: pendingBookings.length,
       },
       earningsSummary,
@@ -698,22 +709,60 @@ async function getUnreadMessageCount(
   try {
     const fieldToCheck = userType === "client" ? "clientId" : "supplierId";
 
+    // Query conversations collection
     const conversationsSnapshot = await db
       .collection("conversations")
       .where(fieldToCheck, "==", userId)
       .get();
 
+    // Also check chats collection (legacy)
+    const chatsSnapshot = await db
+      .collection("chats")
+      .where(fieldToCheck, "==", userId)
+      .get();
+
     let totalUnread = 0;
 
+    // Process conversations
     for (const doc of conversationsSnapshot.docs) {
       const conv = doc.data();
-      const unreadField = userType === "client" ? "clientUnreadCount" : "supplierUnreadCount";
-      totalUnread += conv[unreadField] || 0;
+      // Unread counts are stored as a map: unreadCount[userId] = count
+      const unreadCount = conv.unreadCount as Record<string, number> | undefined;
+      if (unreadCount && unreadCount[userId]) {
+        totalUnread += unreadCount[userId];
+      }
+    }
+
+    // Process chats (legacy)
+    for (const doc of chatsSnapshot.docs) {
+      const chat = doc.data();
+      const unreadCount = chat.unreadCount as Record<string, number> | undefined;
+      if (unreadCount && unreadCount[userId]) {
+        totalUnread += unreadCount[userId];
+      }
     }
 
     return totalUnread;
   } catch (error) {
     console.error(`Error getting unread count for ${userId}:`, error);
+    return 0;
+  }
+}
+
+/**
+ * Get unread notification count for user
+ */
+async function getUnreadNotificationCount(userId: string): Promise<number> {
+  try {
+    const notificationsSnapshot = await db
+      .collection("notifications")
+      .where("userId", "==", userId)
+      .where("read", "==", false)
+      .get();
+
+    return notificationsSnapshot.size;
+  } catch (error) {
+    console.error(`Error getting notification count for ${userId}:`, error);
     return 0;
   }
 }
