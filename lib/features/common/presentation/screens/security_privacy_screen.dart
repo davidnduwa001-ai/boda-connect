@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/constants/dimensions.dart';
@@ -11,6 +12,8 @@ import '../../../../core/routing/route_names.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/providers/supplier_provider.dart';
 import '../../../../core/models/supplier_model.dart';
+import '../../../../core/services/biometric_auth_service.dart';
+import '../../../../core/services/totp_service.dart';
 
 class SecurityPrivacyScreen extends ConsumerStatefulWidget {
   const SecurityPrivacyScreen({super.key});
@@ -21,6 +24,7 @@ class SecurityPrivacyScreen extends ConsumerStatefulWidget {
 
 class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
   bool _biometricsEnabled = false;
+  bool _biometricsAvailable = false;
   bool _twoFactorEnabled = false;
   bool _profilePublic = true;
   bool _showEmail = false;  // Default: hide for privacy
@@ -29,11 +33,46 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
   bool _allowMessages = true;
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isLoadingSecurity = true;
+
+  final BiometricAuthService _biometricService = BiometricAuthService();
+  final TotpService _totpService = TotpService();
 
   @override
   void initState() {
     super.initState();
     _loadPrivacySettings();
+    _loadSecuritySettings();
+  }
+
+  /// Load biometric and 2FA settings
+  Future<void> _loadSecuritySettings() async {
+    final userId = ref.read(authProvider).firebaseUser?.uid;
+    if (userId == null) {
+      setState(() => _isLoadingSecurity = false);
+      return;
+    }
+
+    try {
+      // Check biometric availability
+      final biometricsAvailable = await _biometricService.isBiometricAvailable();
+      final biometricsEnabled = await _biometricService.isBiometricEnabled(userId);
+      final twoFactorEnabled = await _totpService.is2FAEnabled(userId);
+
+      if (mounted) {
+        setState(() {
+          _biometricsAvailable = biometricsAvailable;
+          _biometricsEnabled = biometricsEnabled;
+          _twoFactorEnabled = twoFactorEnabled;
+          _isLoadingSecurity = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading security settings: $e');
+      if (mounted) {
+        setState(() => _isLoadingSecurity = false);
+      }
+    }
   }
 
   /// Load privacy settings from supplier profile in Firestore
@@ -257,37 +296,23 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
           _buildSwitchTile(
             icon: Icons.fingerprint,
             title: 'Autenticação Biométrica',
-            subtitle: 'Use impressão digital ou Face ID',
+            subtitle: _biometricsAvailable
+                ? 'Use impressão digital ou Face ID'
+                : 'Não disponível neste dispositivo',
             value: _biometricsEnabled,
-            onChanged: (value) {
-              setState(() => _biometricsEnabled = value);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    value
-                        ? 'Autenticação biométrica activada'
-                        : 'Autenticação biométrica desactivada',
-                  ),
-                ),
-              );
-            },
+            enabled: _biometricsAvailable && !_isLoadingSecurity,
+            onChanged: _biometricsAvailable ? (value) => _toggleBiometrics(value) : null,
           ),
           const Divider(height: 1, indent: 56),
           _buildSwitchTile(
             icon: Icons.security,
             title: 'Autenticação de Dois Factores',
-            subtitle: 'Segurança adicional via SMS',
+            subtitle: _twoFactorEnabled
+                ? 'Protegido com app autenticador'
+                : 'Adicione segurança extra com TOTP',
             value: _twoFactorEnabled,
-            onChanged: (value) {
-              setState(() => _twoFactorEnabled = value);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    value ? '2FA activado' : '2FA desactivado',
-                  ),
-                ),
-              );
-            },
+            enabled: !_isLoadingSecurity,
+            onChanged: (value) => _toggle2FA(value),
           ),
           const Divider(height: 1, indent: 56),
           _buildSettingTile(
@@ -570,45 +595,50 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
     required String title,
     required String subtitle,
     required bool value,
-    required ValueChanged<bool> onChanged,
+    ValueChanged<bool>? onChanged,
+    bool enabled = true,
   }) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.md),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.peach.withAlpha((0.1 * 255).toInt()),
-              borderRadius: BorderRadius.circular(8),
+    final isEnabled = enabled && onChanged != null;
+    return Opacity(
+      opacity: isEnabled ? 1.0 : 0.5,
+      child: Padding(
+        padding: const EdgeInsets.all(AppDimensions.md),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.peach.withAlpha((0.1 * 255).toInt()),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: AppColors.peach, size: 20),
             ),
-            child: Icon(icon, color: AppColors.peach, size: 20),
-          ),
-          const SizedBox(width: AppDimensions.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: AppTextStyles.caption.copyWith(color: Colors.grey.shade600),
-                ),
-              ],
+            const SizedBox(width: AppDimensions.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.caption.copyWith(color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeColor: AppColors.peach,
-          ),
-        ],
+            const SizedBox(width: 8),
+            Switch(
+              value: value,
+              onChanged: isEnabled ? onChanged : null,
+              activeColor: AppColors.peach,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1467,5 +1497,336 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
         ),
       );
     }
+  }
+
+  // ==================== BIOMETRIC AUTHENTICATION ====================
+  Future<void> _toggleBiometrics(bool enable) async {
+    final userId = ref.read(authProvider).firebaseUser?.uid;
+    if (userId == null) return;
+
+    try {
+      final success = await _biometricService.setBiometricEnabled(userId, enable);
+
+      if (success && mounted) {
+        setState(() => _biometricsEnabled = enable);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              enable
+                  ? 'Autenticação biométrica activada'
+                  : 'Autenticação biométrica desactivada',
+            ),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  // ==================== TWO-FACTOR AUTHENTICATION ====================
+  Future<void> _toggle2FA(bool enable) async {
+    if (enable) {
+      await _show2FASetupDialog();
+    } else {
+      await _show2FADisableDialog();
+    }
+  }
+
+  Future<void> _show2FASetupDialog() async {
+    final userId = ref.read(authProvider).firebaseUser?.uid;
+    final userEmail = ref.read(authProvider).firebaseUser?.email;
+
+    if (userId == null || userEmail == null) return;
+
+    // Generate setup data
+    Map<String, String>? setupData;
+    try {
+      setupData = await _totpService.setup2FA(userId, userEmail);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao configurar 2FA: $e'), backgroundColor: AppColors.error),
+        );
+      }
+      return;
+    }
+
+    if (!mounted || setupData == null) return;
+
+    final codeController = TextEditingController();
+    bool isVerifying = false;
+    String? errorMessage;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.security, color: AppColors.peach),
+              SizedBox(width: 12),
+              Text('Configurar 2FA'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '1. Instale um app autenticador:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                const Text('   • Google Authenticator\n   • Microsoft Authenticator\n   • Authy'),
+                const SizedBox(height: 16),
+                const Text(
+                  '2. Escaneie o QR code:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: QrImageView(
+                      data: setupData!['otpAuthUri']!,
+                      version: QrVersions.auto,
+                      size: 180,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Ou insira manualmente:',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.gray100,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: SelectableText(
+                    setupData['secret']!,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '3. Insira o código de 6 dígitos:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: codeController,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 8,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: '000000',
+                    counterText: '',
+                    errorText: errorMessage,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: isVerifying
+                  ? null
+                  : () async {
+                      final code = codeController.text.trim();
+                      if (code.length != 6) {
+                        setDialogState(() => errorMessage = 'Insira um código de 6 dígitos');
+                        return;
+                      }
+
+                      setDialogState(() {
+                        isVerifying = true;
+                        errorMessage = null;
+                      });
+
+                      try {
+                        final success = await _totpService.verify2FASetup(userId, code);
+                        if (success) {
+                          if (context.mounted) Navigator.pop(context, true);
+                        } else {
+                          setDialogState(() {
+                            errorMessage = 'Código inválido. Tente novamente.';
+                            isVerifying = false;
+                          });
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          errorMessage = 'Erro: $e';
+                          isVerifying = false;
+                        });
+                      }
+                    },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.peach),
+              child: isVerifying
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Verificar'),
+            ),
+          ],
+        ),
+      ),
+    ).then((result) {
+      if (result == true && mounted) {
+        setState(() => _twoFactorEnabled = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Autenticação de dois factores activada!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    });
+  }
+
+  Future<void> _show2FADisableDialog() async {
+    final userId = ref.read(authProvider).firebaseUser?.uid;
+    if (userId == null) return;
+
+    final codeController = TextEditingController();
+    bool isVerifying = false;
+    String? errorMessage;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.security, color: AppColors.warning),
+              SizedBox(width: 12),
+              Text('Desactivar 2FA'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Para desactivar a autenticação de dois factores, insira o código atual do seu app autenticador:',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: codeController,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 8,
+                ),
+                decoration: InputDecoration(
+                  hintText: '000000',
+                  counterText: '',
+                  errorText: errorMessage,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: isVerifying
+                  ? null
+                  : () async {
+                      final code = codeController.text.trim();
+                      if (code.length != 6) {
+                        setDialogState(() => errorMessage = 'Insira um código de 6 dígitos');
+                        return;
+                      }
+
+                      setDialogState(() {
+                        isVerifying = true;
+                        errorMessage = null;
+                      });
+
+                      try {
+                        final success = await _totpService.disable2FA(userId, code);
+                        if (success) {
+                          if (context.mounted) Navigator.pop(context, true);
+                        } else {
+                          setDialogState(() {
+                            errorMessage = 'Código inválido. Tente novamente.';
+                            isVerifying = false;
+                          });
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          errorMessage = 'Erro: $e';
+                          isVerifying = false;
+                        });
+                      }
+                    },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning),
+              child: isVerifying
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Desactivar'),
+            ),
+          ],
+        ),
+      ),
+    ).then((result) {
+      if (result == true && mounted) {
+        setState(() => _twoFactorEnabled = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Autenticação de dois factores desactivada'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+      }
+    });
   }
 }
