@@ -321,6 +321,16 @@ export const onBookingUpdated = region.firestore
             data: {bookingId, supplierId: after.supplierId, supplierName, eventName: eventNameForUpdate},
           });
           break;
+
+        case "rejected":
+          await sendPushNotification({
+            userId: after.clientId,
+            title: "Reserva Recusada",
+            body: `${supplierName} não pôde aceitar a reserva para ${eventNameForUpdate}`,
+            type: "booking_rejected",
+            data: {bookingId, supplierName, eventName: eventNameForUpdate},
+          });
+          break;
       }
 
       return null;

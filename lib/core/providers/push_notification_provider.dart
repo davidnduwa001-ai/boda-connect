@@ -168,6 +168,9 @@ class PushNotificationNotifier extends StateNotifier<NotificationState> {
       case 'booking_completed':
         return Routes.supplierOrders;
 
+      case 'booking_rejected':
+        return Routes.clientBookings;
+
       case 'new_message':
         final chatId = data['chatId'] as String?;
         if (chatId != null) {

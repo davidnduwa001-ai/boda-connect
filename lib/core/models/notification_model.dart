@@ -75,6 +75,7 @@ class NotificationType {
   static const String newBooking = 'new_booking';
   static const String bookingConfirmed = 'booking_confirmed';
   static const String bookingCancelled = 'booking_cancelled';
+  static const String bookingRejected = 'booking_rejected';
   static const String newMessage = 'new_message';
   static const String newReview = 'new_review';
   static const String paymentReceived = 'payment_received';

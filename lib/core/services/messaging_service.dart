@@ -177,6 +177,11 @@ class MessagingService {
         }
         break;
 
+      case 'booking_rejected':
+        // For clients: navigate to their bookings list
+        appRouter.push(Routes.clientBookings);
+        break;
+
       case 'new_message':
       case 'chat_message':
         final chatUserId = data['senderId'] as String?;
