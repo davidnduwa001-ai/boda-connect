@@ -1,6 +1,7 @@
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import {fundEscrow} from "../finance/escrowService";
+import {applyPaymentToBooking} from "./paymentHelpers";
 
 const db = admin.firestore();
 const REGION = "us-central1";
@@ -92,28 +93,35 @@ function mapProxyPayStatus(apiStatus: string): string {
 }
 
 /**
- * Update booking with payment info
+ * Update booking with payment info (idempotent)
+ *
+ * Uses applyPaymentToBooking to ensure each payment is only applied once.
+ * Returns true if this was a new application, false if already applied.
  */
 async function updateBookingPayment(
     bookingId: string,
     paymentId: string,
     amount: number
-): Promise<void> {
-  const bookingRef = db.collection("bookings").doc(bookingId);
-
-  await bookingRef.update({
-    paymentStatus: "paid",
-    paidAmount: admin.firestore.FieldValue.increment(amount),
+): Promise<boolean> {
+  // Use idempotent helper - prevents double-increment on retry
+  const result = await applyPaymentToBooking(bookingId, paymentId, amount, {
+    // Add payment record to array for history
     payments: admin.firestore.FieldValue.arrayUnion({
       paymentId: paymentId,
       amount: amount,
       method: "multicaixa_express",
-      paidAt: admin.firestore.FieldValue.serverTimestamp(),
+      paidAt: new Date().toISOString(),
     }),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  // Notify supplier
+  // If already applied, skip notification
+  if (result.alreadyApplied) {
+    console.log(`Payment ${paymentId} already applied to booking ${bookingId}`);
+    return false;
+  }
+
+  // Notify supplier only for new applications
+  const bookingRef = db.collection("bookings").doc(bookingId);
   const bookingDoc = await bookingRef.get();
   if (bookingDoc.exists) {
     const booking = bookingDoc.data()!;
@@ -142,6 +150,8 @@ async function updateBookingPayment(
       }
     }
   }
+
+  return true;
 }
 
 /**

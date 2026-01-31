@@ -31,7 +31,13 @@ import {fundEscrow} from "../finance/escrowService";
 import {wrapHttpHandler} from "../common/errors";
 import {PaymentLogger} from "../common/logger";
 import {requireFeatureEnabled} from "../common/killSwitch";
-import {isWebhookProcessed, markWebhookProcessed} from "../common/idempotency";
+import {
+  isWebhookProcessed,
+  markWebhookProcessed,
+  markOperationStarted,
+  webhookIdempotencyKey,
+} from "../common/idempotency";
+import {applyPaymentToBooking} from "./paymentHelpers";
 
 const db = admin.firestore();
 const REGION = "us-central1";
@@ -194,6 +200,10 @@ export const stripeWebhook = functions
                 return;
               }
 
+              // Mark as processing IMMEDIATELY to prevent concurrent duplicates
+              const idempotencyKey = webhookIdempotencyKey("stripe", event.type, event.eventId);
+              await markOperationStarted(idempotencyKey, `webhook_${event.type}`, event.eventId);
+
               // Find the payment record
               let payment = await findPaymentByProviderPaymentId(event.providerPaymentId);
               if (!payment && event.reference) {
@@ -249,15 +259,23 @@ export const stripeWebhook = functions
                   }
                 }
 
-                // Update booking status to paid
+                // Update booking paidAmount (idempotent - safe for webhook replays)
                 try {
-                  await db.collection("bookings").doc(payment.data.bookingId).update({
-                    status: "paid",
-                    paidAmount: admin.firestore.FieldValue.increment(event.amount),
-                    paymentId: payment.id,
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                  });
-                  logger.info("booking_updated", {bookingId: payment.data.bookingId});
+                  const applyResult = await applyPaymentToBooking(
+                      payment.data.bookingId,
+                      payment.id, // paymentId as idempotency key
+                      event.amount
+                  );
+
+                  if (applyResult.alreadyApplied) {
+                    logger.idempotentSkip("booking_payment", payment.id, "already_applied");
+                  } else {
+                    logger.info("booking_updated", {
+                      bookingId: payment.data.bookingId,
+                      newPaidAmount: applyResult.newPaidAmount,
+                      newPaymentStatus: applyResult.newPaymentStatus,
+                    });
+                  }
                 } catch (bookingError) {
                   const errorMsg = bookingError instanceof Error ?
                     bookingError.message : "unknown";
