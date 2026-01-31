@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -202,10 +203,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             icon: Icons.language,
             title: 'Idioma',
             subtitle: settings.language,
-            items: ['Português', 'English', 'Français', 'Español'],
+            items: ['Português', 'English'],
             selectedValue: settings.language,
             onChanged: (value) {
               if (value != null) {
+                // Map language name to locale code
+                final localeCode = value == 'Português' ? 'pt' : 'en';
+
+                // Actually change the app locale
+                context.setLocale(Locale(localeCode));
+
+                // Save the preference
                 ref.read(appSettingsProvider.notifier).setLanguage(value);
                 _showSaveIndicator();
               }

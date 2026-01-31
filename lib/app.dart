@@ -75,6 +75,9 @@ class _BodaConnectAppState extends ConsumerState<BodaConnectApp> {
     if (_servicesInitialized) return;
     _servicesInitialized = true;
 
+    // Load and apply saved locale
+    _loadSavedLocale();
+
     // Run initializations in parallel with individual timeouts for fault tolerance
     await Future.wait([
       _initOfflineSync(),
@@ -82,6 +85,24 @@ class _BodaConnectAppState extends ConsumerState<BodaConnectApp> {
       _initDeepLinks(),
       _initMarket(),
     ], eagerError: false); // Continue even if one fails
+  }
+
+  /// Load saved language from settings and apply to context
+  void _loadSavedLocale() {
+    try {
+      final settings = ref.read(appSettingsProvider);
+      final language = settings.language;
+      final localeCode = language == 'Português' ? 'pt' : 'en';
+      final savedLocale = Locale(localeCode);
+
+      // Only change if different from current
+      if (context.locale != savedLocale) {
+        context.setLocale(savedLocale);
+        Log.i('Applied saved locale: $localeCode');
+      }
+    } catch (e) {
+      Log.warn('Failed to load saved locale: $e');
+    }
   }
 
   Future<void> _initOfflineSync() async {

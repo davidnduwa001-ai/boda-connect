@@ -265,9 +265,10 @@ class _SupplierPublicProfileScreenState
                         ],
                       ),
                       const SizedBox(height: AppDimensions.sm),
-                      if (supplier.location?.city != null)
+                      // Use privacy-aware location display
+                      if (supplier.privacySettings.showAddress || supplier.location?.city != null)
                         _buildContactInfo(Icons.location_on_outlined,
-                            '${supplier.location!.city}, ${supplier.location!.province ?? "Angola"}'),
+                            supplier.publicLocationDisplay),
                       const SizedBox(height: 4),
                       // Member since badge (Tenure)
                       _buildContactInfo(

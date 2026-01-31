@@ -244,7 +244,8 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
   }
 
   Widget _buildHeaderInfo(SupplierModel supplier) {
-    final location = supplier.location?.city ?? 'Luanda';
+    // Use privacy-aware location display
+    final location = supplier.publicLocationDisplay;
 
     // Watch calculated response time from provider
     final responseTimeAsync = ref.watch(supplierResponseTimeProvider(supplier.id));
@@ -399,9 +400,8 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
   }
 
   Widget _buildAboutTab(SupplierModel supplier) {
-    final location = supplier.location?.city != null
-        ? '${supplier.location!.city}${supplier.location!.province != null ? ', ${supplier.location!.province}' : ''}'
-        : 'Luanda';
+    // Use privacy-aware location display
+    final location = supplier.publicLocationDisplay;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppDimensions.md),
@@ -524,9 +524,10 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
       error: (_, __) => const SizedBox.shrink(),
       data: (visibility) {
         // Check if supplier has any contact info to show
-        final hasPhone = supplier.phone != null && supplier.phone!.isNotEmpty;
+        // Uses privacy-aware getters: publicPhone, publicEmail respect privacySettings
+        final hasPhone = supplier.publicPhone != null && supplier.publicPhone!.isNotEmpty;
         final hasWhatsapp = supplier.whatsapp != null && supplier.whatsapp!.isNotEmpty;
-        final hasEmail = supplier.email != null && supplier.email!.isNotEmpty;
+        final hasEmail = supplier.publicEmail != null && supplier.publicEmail!.isNotEmpty;
 
         if (!hasPhone && !hasWhatsapp && !hasEmail) {
           return const SizedBox.shrink();
@@ -587,12 +588,12 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
                         ],
                       ),
                     ),
-                    // Phone
+                    // Phone (uses privacy-aware publicPhone)
                     if (hasPhone)
                       _buildContactRevealItem(
                         icon: Icons.phone,
                         label: 'Telefone',
-                        value: supplier.phone!,
+                        value: supplier.publicPhone!,
                         color: AppColors.info,
                         onTap: () {
                           // Track call click (high-value interaction)
@@ -601,7 +602,7 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
                             ref.read(supplierStatsProvider(supplier.id).notifier)
                                 .trackCallClick(currentUser.uid);
                           }
-                          _launchPhone(supplier.phone!);
+                          _launchPhone(supplier.publicPhone!);
                         },
                       ),
                     // WhatsApp
@@ -623,15 +624,15 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
                         },
                       ),
                     ],
-                    // Email
+                    // Email (uses privacy-aware publicEmail)
                     if (hasEmail) ...[
                       if (hasPhone || hasWhatsapp) const SizedBox(height: AppDimensions.sm),
                       _buildContactRevealItem(
                         icon: Icons.email,
                         label: 'Email',
-                        value: supplier.email!,
+                        value: supplier.publicEmail!,
                         color: AppColors.peach,
-                        onTap: () => _launchEmail(supplier.email!),
+                        onTap: () => _launchEmail(supplier.publicEmail!),
                       ),
                     ],
                   ],
