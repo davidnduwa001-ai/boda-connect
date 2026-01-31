@@ -142,11 +142,25 @@ class CustomOfferRepository {
     );
 
     // Add message to chat/conversation (uses correct collection)
+    // Use field names compatible with both old (chatId/createdAt) and new (conversationId/timestamp) formats
     final messageRef = await collection
         .doc(chatId)
         .collection('messages')
         .add({
-          ...message.toFirestore(),
+          // Core message fields (new format uses conversationId/timestamp)
+          'conversationId': chatId,
+          'chatId': chatId, // Keep for backwards compatibility
+          'senderId': senderId,
+          'senderName': senderName,
+          'receiverId': buyerId, // Required by new MessageModel
+          'type': message.type.name,
+          'text': message.text,
+          'timestamp': Timestamp.fromDate(now), // New format field
+          'createdAt': Timestamp.fromDate(now), // Old format field
+          'isRead': false,
+          'isDeleted': false,
+          // Quote data
+          'quoteData': message.quoteData?.toMap(),
           'offerData': offerData.toMap(),
         });
 
