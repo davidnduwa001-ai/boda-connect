@@ -578,6 +578,12 @@ async function getSupplierEarningsSummary(supplierId: string): Promise<{
 
 /**
  * Get supplier blocked dates
+ * INCLUDES: Manual blocked dates + booking dates (pending, confirmed, inProgress)
+ *
+ * This ensures the Agenda/Disponibilidade page shows:
+ * - Manually blocked dates (type: blocked/unavailable)
+ * - Pending booking requests (type: requested)
+ * - Confirmed/active bookings (type: reserved)
  */
 async function getSupplierBlockedDates(
   supplierId: string
@@ -588,7 +594,8 @@ async function getSupplierBlockedDates(
       now.toMillis() + 60 * 24 * 60 * 60 * 1000
     );
 
-    const snapshot = await db
+    // 1. Get manually blocked dates from subcollection
+    const blockedSnapshot = await db
       .collection("suppliers")
       .doc(supplierId)
       .collection("blocked_dates")
@@ -597,7 +604,7 @@ async function getSupplierBlockedDates(
       .orderBy("date")
       .get();
 
-    return snapshot.docs.map((doc) => {
+    const manualBlockedDates: SupplierBlockedDateSummary[] = blockedSnapshot.docs.map((doc) => {
       const data = doc.data();
       const type = data.type || "blocked";
 
@@ -610,6 +617,66 @@ async function getSupplierBlockedDates(
         canUnblock: type === "blocked" || type === "unavailable",
       };
     });
+
+    // 2. Get booking dates (pending, confirmed, inProgress)
+    // These bookings should appear in the Agenda
+    const bookingStatuses = ["pending", "confirmed", "inProgress"];
+    const bookingDates: SupplierBlockedDateSummary[] = [];
+
+    // Also check by userId for legacy bookings
+    const supplierDoc = await db.collection("suppliers").doc(supplierId).get();
+    const supplierData = supplierDoc.data() || {};
+    const supplierAuthUid = supplierData.userId || supplierData.authUid || "";
+    const supplierIdsToSearch = [supplierId];
+    if (supplierAuthUid && supplierAuthUid !== supplierId) {
+      supplierIdsToSearch.push(supplierAuthUid);
+    }
+
+    for (const searchId of supplierIdsToSearch) {
+      const bookingsSnapshot = await db
+        .collection("bookings")
+        .where("supplierId", "==", searchId)
+        .where("status", "in", bookingStatuses)
+        .where("eventDate", ">=", now)
+        .where("eventDate", "<=", sixtyDaysLater)
+        .get();
+
+      for (const doc of bookingsSnapshot.docs) {
+        // Skip if already added (from other supplierId search)
+        if (bookingDates.some((bd) => bd.bookingId === doc.id)) continue;
+
+        const booking = doc.data();
+        const status = booking.status as string;
+
+        // Map booking status to blocked date type
+        let type: "reserved" | "requested";
+        if (status === "pending") {
+          type = "requested";
+        } else {
+          type = "reserved"; // confirmed or inProgress
+        }
+
+        // Build reason from booking details
+        const eventName = booking.eventName || "Evento";
+        const clientName = booking.clientName || "Cliente";
+        const reason = `${eventName} - ${clientName}`;
+
+        bookingDates.push({
+          id: `booking_${doc.id}`,
+          date: booking.eventDate,
+          type,
+          reason,
+          bookingId: doc.id,
+          canUnblock: false, // Booking dates can't be manually unblocked
+        });
+      }
+    }
+
+    // 3. Merge and sort by date
+    const allBlockedDates = [...manualBlockedDates, ...bookingDates];
+    allBlockedDates.sort((a, b) => a.date.toMillis() - b.date.toMillis());
+
+    return allBlockedDates;
   } catch (error) {
     console.error(`Error getting blocked dates for ${supplierId}:`, error);
     return [];
