@@ -125,7 +125,7 @@ async function isParticipant(
     }
     console.log(`isParticipant: No match in conversations collection. User IDs checked: ${[...userIds].join(", ")}`);
   } else {
-    console.log(`isParticipant: Conversation not found in conversations collection`);
+    console.log("isParticipant: Conversation not found in conversations collection");
   }
 
   // Fallback to chats collection (legacy)
@@ -153,7 +153,7 @@ async function isParticipant(
     }
     console.log(`isParticipant: No match in chats collection. User IDs checked: ${[...userIds].join(", ")}`);
   } else {
-    console.log(`isParticipant: Conversation not found in chats collection either`);
+    console.log("isParticipant: Conversation not found in chats collection either");
   }
 
   console.log(`isParticipant: FAILED - User ${userId} (IDs: ${[...userIds].join(", ")}) not found in conversation ${conversationId}`);
@@ -307,12 +307,12 @@ export const sendMessage = functions
         }
 
         // 4. Get sender info
-        console.log(`sendMessage: Getting sender info...`);
+        console.log("sendMessage: Getting sender info...");
         const senderInfo = await getUserInfo(senderId);
         console.log(`sendMessage: Sender info: name=${senderInfo.name}, isSupplier=${senderInfo.isSupplier}`);
 
         // 5. Get receiver ID
-        console.log(`sendMessage: Getting other participant...`);
+        console.log("sendMessage: Getting other participant...");
         const receiverId = await getOtherParticipant(data.conversationId, senderId);
         console.log(`sendMessage: Other participant receiverId=${receiverId}`);
         if (!receiverId) {
@@ -357,7 +357,7 @@ export const sendMessage = functions
         }
 
         // 7. Write message - try conversations first, fallback to chats
-        console.log(`sendMessage: Finding conversation document...`);
+        console.log("sendMessage: Finding conversation document...");
         let messagesRef: FirebaseFirestore.CollectionReference;
         let conversationRef: FirebaseFirestore.DocumentReference;
 
@@ -367,17 +367,17 @@ export const sendMessage = functions
             .get();
 
         if (convDoc.exists) {
-          console.log(`sendMessage: Found in conversations collection`);
+          console.log("sendMessage: Found in conversations collection");
           conversationRef = db.collection("conversations").doc(data.conversationId);
           messagesRef = conversationRef.collection("messages");
         } else {
-          console.log(`sendMessage: Not in conversations, using chats collection`);
+          console.log("sendMessage: Not in conversations, using chats collection");
           conversationRef = db.collection("chats").doc(data.conversationId);
           messagesRef = conversationRef.collection("messages");
         }
 
         // Add the message
-        console.log(`sendMessage: Adding message to collection...`);
+        console.log("sendMessage: Adding message to collection...");
         const messageRef = await messagesRef.add(messageData);
         console.log(`sendMessage: Message added with ID=${messageRef.id}`);
 
@@ -388,7 +388,7 @@ export const sendMessage = functions
           messageType === "quote" ? "💰 Orçamento" :
           messageType === "file" ? "📎 Arquivo" : "";
 
-        console.log(`sendMessage: Updating conversation...`);
+        console.log("sendMessage: Updating conversation...");
         await conversationRef.update({
           lastMessage: lastMessagePreview,
           lastMessageAt: now,
