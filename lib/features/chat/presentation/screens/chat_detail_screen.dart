@@ -234,12 +234,25 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
                 // Convert MessageEntity to ChatMessage
                 final currentUserId = ref.read(currentUserProvider)?.uid;
                 final firestoreMessages = messageEntities.map((entity) {
+                  // Convert QuoteDataEntity to Map for quote messages
+                  Map<String, dynamic>? quoteDataMap;
+                  if (entity.quoteData != null) {
+                    quoteDataMap = {
+                      'packageId': entity.quoteData!.packageId,
+                      'packageName': entity.quoteData!.packageName,
+                      'price': entity.quoteData!.price,
+                      'notes': entity.quoteData!.notes,
+                      'status': entity.quoteData!.status,
+                    };
+                  }
                   return ChatMessage(
                     id: entity.id,
                     text: entity.text ?? '',
                     isFromMe: entity.senderId == currentUserId,
                     timestamp: entity.timestamp,
                     isFlagged: false,
+                    type: entity.type.name,
+                    quoteData: quoteDataMap,
                   );
                 }).toList();
 
@@ -1391,6 +1404,11 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   }
 
   Widget _buildMessageBubble(ChatMessage message) {
+    // Special rendering for quote/proposal messages
+    if (message.isQuote && message.quoteData != null) {
+      return _buildProposalCard(message);
+    }
+
     return Align(
       alignment: message.isFromMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -1447,6 +1465,205 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Build a special card for proposal/quote messages
+  Widget _buildProposalCard(ChatMessage message) {
+    final quoteData = message.quoteData!;
+    final price = quoteData['price'] as int? ?? 0;
+    final packageName = quoteData['packageName'] as String? ?? 'Proposta Personalizada';
+    final notes = quoteData['notes'] as String? ?? '';
+    final status = quoteData['status'] as String? ?? 'pending';
+
+    final isPending = status == 'pending';
+    final isAccepted = status == 'accepted';
+    final isRejected = status == 'rejected';
+
+    Color statusColor = AppColors.warning;
+    String statusText = 'Pendente';
+    IconData statusIcon = Icons.schedule;
+
+    if (isAccepted) {
+      statusColor = AppColors.success;
+      statusText = 'Aceite';
+      statusIcon = Icons.check_circle;
+    } else if (isRejected) {
+      statusColor = AppColors.error;
+      statusText = 'Rejeitada';
+      statusIcon = Icons.cancel;
+    }
+
+    return Align(
+      alignment: message.isFromMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppDimensions.sm),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.85),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.peach.withValues(alpha: 0.3), width: 2),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header with icon and title
+            Container(
+              padding: const EdgeInsets.all(AppDimensions.sm),
+              decoration: BoxDecoration(
+                color: AppColors.peach.withValues(alpha: 0.1),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.peach,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.local_offer, color: AppColors.white, size: 20),
+                  ),
+                  const SizedBox(width: AppDimensions.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          packageName,
+                          style: AppTextStyles.body.copyWith(fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          message.isFromMe ? 'Proposta enviada' : 'Proposta recebida',
+                          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Status badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(statusIcon, size: 14, color: statusColor),
+                        const SizedBox(width: 4),
+                        Text(statusText, style: AppTextStyles.caption.copyWith(color: statusColor, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Price
+            Padding(
+              padding: const EdgeInsets.all(AppDimensions.sm),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text('Valor: ', style: AppTextStyles.body.copyWith(color: AppColors.textSecondary)),
+                      Text(
+                        '${_formatPrice(price)} AOA',
+                        style: AppTextStyles.h3.copyWith(color: AppColors.peach, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  if (notes.isNotEmpty) ...[
+                    const SizedBox(height: AppDimensions.xs),
+                    Text(
+                      notes,
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // Action buttons (only for pending proposals received by the user)
+            if (isPending && !message.isFromMe) ...[
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.all(AppDimensions.xs),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: () => _handleRejectProposal(message),
+                        icon: const Icon(Icons.close, size: 18),
+                        label: const Text('Rejeitar'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.error,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppDimensions.xs),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _handleAcceptProposal(message),
+                        icon: const Icon(Icons.check, size: 18),
+                        label: const Text('Aceitar'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.success,
+                          foregroundColor: AppColors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Timestamp
+            Padding(
+              padding: const EdgeInsets.only(right: AppDimensions.sm, bottom: AppDimensions.xs),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  _formatTime(message.timestamp),
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 10),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Handle accepting a proposal
+  Future<void> _handleAcceptProposal(ChatMessage message) async {
+    // TODO: Implement accept proposal flow
+    // This should show a dialog to collect event details and call the acceptOffer method
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Funcionalidade de aceitar proposta em desenvolvimento')),
+    );
+  }
+
+  /// Handle rejecting a proposal
+  Future<void> _handleRejectProposal(ChatMessage message) async {
+    // TODO: Implement reject proposal flow
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Funcionalidade de rejeitar proposta em desenvolvimento')),
+    );
+  }
+
+  /// Format price with thousand separators
+  String _formatPrice(int price) {
+    return price.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
     );
   }
 
@@ -2175,12 +2392,18 @@ class ChatMessage {
     required this.isFromMe,
     required this.timestamp,
     this.isFlagged = false,
+    this.type = 'text',
+    this.quoteData,
   });
   final String id;
   final String text;
   final bool isFromMe;
   final DateTime timestamp;
   final bool isFlagged;
+  final String type;
+  final Map<String, dynamic>? quoteData;
+
+  bool get isQuote => type == 'quote';
 }
 
 enum ProposalStatus { pending, accepted, rejected }
