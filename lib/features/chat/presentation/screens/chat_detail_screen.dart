@@ -1262,8 +1262,44 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
         ),
       ),
       actions: [
-        // Phone calls not allowed - text messages only
-        IconButton(icon: const Icon(Icons.more_vert, color: AppColors.gray700), onPressed: () {}),
+        // Chat options menu
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, color: AppColors.gray700),
+          onSelected: (value) => _handleMenuAction(value),
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'view_profile',
+              child: Row(
+                children: [
+                  Icon(Icons.person_outline, size: 20),
+                  SizedBox(width: 12),
+                  Text('Ver Perfil'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'search',
+              child: Row(
+                children: [
+                  Icon(Icons.search, size: 20),
+                  SizedBox(width: 12),
+                  Text('Pesquisar na conversa'),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
+            const PopupMenuItem(
+              value: 'block',
+              child: Row(
+                children: [
+                  Icon(Icons.block, size: 20, color: AppColors.error),
+                  SizedBox(width: 12),
+                  Text('Bloquear', style: TextStyle(color: AppColors.error)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -1662,6 +1698,69 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     // TODO: Implement reject proposal flow
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Funcionalidade de rejeitar proposta em desenvolvimento')),
+    );
+  }
+
+  /// Handle chat menu actions
+  void _handleMenuAction(String action) {
+    switch (action) {
+      case 'view_profile':
+        _viewOtherUserProfile();
+        break;
+      case 'search':
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pesquisa em desenvolvimento')),
+        );
+        break;
+      case 'block':
+        _showBlockConfirmation();
+        break;
+    }
+  }
+
+  /// Navigate to other user's profile
+  void _viewOtherUserProfile() {
+    if (widget.otherUserId == null) return;
+
+    final currentUser = ref.read(currentUserProvider);
+    final isSupplier = currentUser?.userType.name == 'supplier';
+
+    if (isSupplier) {
+      // Supplier viewing client - no dedicated profile page
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Perfil de ${widget.otherUserName ?? "Cliente"}')),
+      );
+    } else {
+      // Client viewing supplier - navigate to supplier profile
+      context.push('/supplier/${widget.otherUserId}');
+    }
+  }
+
+  /// Show block confirmation dialog
+  void _showBlockConfirmation() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Bloquear utilizador'),
+        content: Text('Tem certeza que deseja bloquear ${widget.otherUserName ?? "este utilizador"}? Não receberá mais mensagens desta pessoa.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: Implement block functionality
+              ScaffoldMessenger.of(this.context).showSnackBar(
+                const SnackBar(content: Text('Funcionalidade de bloqueio em desenvolvimento')),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Bloquear', style: TextStyle(color: AppColors.white)),
+          ),
+        ],
+      ),
     );
   }
 
