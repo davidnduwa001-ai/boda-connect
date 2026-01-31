@@ -343,8 +343,15 @@ class _SupplierProfileScreenState extends ConsumerState<SupplierProfileScreen> {
   Widget _buildPerformanceCard(supplier, int packageCount, List<BookingModel> bookings) {
     // Calculate current month statistics
     final now = DateTime.now();
-    final currentMonthBookings = bookings.where((b) =>
+
+    // Bookings with events this month (for revenue calculation)
+    final currentMonthEventBookings = bookings.where((b) =>
       b.eventDate.year == now.year && b.eventDate.month == now.month
+    ).toList();
+
+    // Bookings CREATED this month (for "Novos Pedidos" count)
+    final currentMonthNewBookings = bookings.where((b) =>
+      b.createdAt.year == now.year && b.createdAt.month == now.month
     ).toList();
 
     // Calculate total events (all time)
@@ -353,13 +360,13 @@ class _SupplierProfileScreenState extends ConsumerState<SupplierProfileScreen> {
     // Calculate chat conversations (unique clients)
     final uniqueClients = bookings.map((b) => b.clientId).toSet().length;
 
-    // Calculate current month revenue
-    final monthRevenue = currentMonthBookings
+    // Calculate current month revenue (from events this month)
+    final monthRevenue = currentMonthEventBookings
         .where((b) => b.status == BookingStatus.completed)
         .fold<int>(0, (sum, b) => sum + b.paidAmount);
 
-    // Calculate new orders this month
-    final monthOrders = currentMonthBookings.length;
+    // Calculate new orders this month (bookings created this month)
+    final monthOrders = currentMonthNewBookings.length;
 
     // Calculate acceptance rate (confirmed vs total)
     final confirmedOrPaid = bookings.where((b) =>
