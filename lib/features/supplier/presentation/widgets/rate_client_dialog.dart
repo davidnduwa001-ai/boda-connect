@@ -251,7 +251,7 @@ class _RateClientDialogState extends ConsumerState<RateClientDialog> {
         bookingId: widget.bookingId,
         supplierId: supplier.id,
         clientId: widget.clientId,
-        supplierName: supplier.businessName ?? supplier.contactName,
+        supplierName: supplier.businessName,
         rating: _rating,
         comment: _commentController.text.trim().isNotEmpty
             ? _commentController.text.trim()
