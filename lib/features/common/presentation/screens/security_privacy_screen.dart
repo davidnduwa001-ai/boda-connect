@@ -1151,8 +1151,8 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
             await doc.reference.delete();
           }
 
-          // Sign out
-          await FirebaseAuth.instance.signOut();
+          // Sign out via auth provider (handles FCM cleanup, cache, presence, etc.)
+          await ref.read(authProvider.notifier).signOut();
 
           if (mounted) {
             context.go('/welcome');

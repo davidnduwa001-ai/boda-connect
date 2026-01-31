@@ -5,6 +5,7 @@ import 'package:boda_connect/core/models/user_model.dart';
 import 'package:boda_connect/core/models/user_type.dart';
 import 'package:boda_connect/core/services/auth_service.dart';
 import 'package:boda_connect/core/services/presence_service.dart';
+import 'package:boda_connect/core/services/push_notification.dart';
 import 'package:boda_connect/core/services/security_service.dart';
 import 'package:boda_connect/core/services/rate_limiter_service.dart';
 import 'package:boda_connect/core/services/user_cache_service.dart';
@@ -434,9 +435,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   /// Sign out
+  ///
+  /// Performs complete cleanup:
+  /// 1. Stops presence tracking
+  /// 2. Terminates security session
+  /// 3. Clears FCM token (prevents push to wrong user)
+  /// 4. Clears cached user data
+  /// 5. Signs out from Firebase Auth
   Future<void> signOut() async {
     // Stop presence tracking before signing out
     await _presenceService.stopTracking();
+
+    // Terminate security session
     try {
       final securityService = SecurityService();
       final sessionId = securityService.currentSessionId;
@@ -449,8 +459,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       debugPrint('Error terminating session: $e');
     }
+
+    // Clear FCM token to prevent push notifications to wrong user
+    try {
+      final pushService = PushNotificationService();
+      await pushService.clearToken();
+    } catch (e) {
+      debugPrint('Error clearing FCM token: $e');
+    }
+
     // Clear cached user data
     await _cacheService.clearAll();
+
+    // Sign out from Firebase Auth
     await _authService.signOut();
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
