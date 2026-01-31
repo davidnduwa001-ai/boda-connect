@@ -390,7 +390,7 @@ class _ClientBookingsScreenState extends ConsumerState<ClientBookingsScreen>
                       icon: const Icon(Icons.delete_outline, size: 18),
                       label: const Text('Remover da lista'),
                       style: TextButton.styleFrom(
-                        foregroundColor: AppColors.gray500,
+                        foregroundColor: AppColors.gray400,
                       ),
                     ),
                   ),
