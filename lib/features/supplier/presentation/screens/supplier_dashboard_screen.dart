@@ -152,11 +152,46 @@ class _SupplierDashboardScreenState extends ConsumerState<SupplierDashboardScree
           },
         ),
         actions: [
-          // Chat button with unread count
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline, color: Colors.black),
-            onPressed: () {
-              context.push(Routes.chatList);
+          // Chat button with unread message count badge
+          Builder(
+            builder: (context) {
+              final unreadMessages = ref.watch(supplierUnreadMessagesProvider);
+              return IconButton(
+                icon: Stack(
+                  children: [
+                    const Icon(Icons.chat_bubble_outline, color: Colors.black),
+                    if (unreadMessages > 0)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          decoration: const BoxDecoration(
+                            color: AppColors.peach,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              unreadMessages > 9 ? '9+' : '$unreadMessages',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                onPressed: () {
+                  context.push(Routes.chatList);
+                },
+              );
             },
           ),
           // Notifications bell with unread notification badge

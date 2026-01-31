@@ -322,22 +322,24 @@ final clientUpcomingEventsProvider = Provider<List<ClientEventSummary>>((ref) {
 });
 
 /// Unread message count from projection (for badges)
+/// Uses real-time stream for immediate updates
 final clientUnreadMessagesProvider = Provider<int>((ref) {
-  final viewState = ref.watch(clientViewProvider);
-  return viewState.view?.unreadMessages ?? 0;
+  final viewAsync = ref.watch(clientViewStreamProvider);
+  return viewAsync.asData?.value?.unreadMessages ?? 0;
 });
 
 /// Unread notification count from projection (for badges)
-/// UI-FIRST: Uses projection instead of direct Firestore query
+/// Uses real-time stream for immediate updates
 final clientUnreadNotificationsProvider = Provider<int>((ref) {
-  final viewState = ref.watch(clientViewProvider);
-  return viewState.view?.unreadNotifications ?? 0;
+  final viewAsync = ref.watch(clientViewStreamProvider);
+  return viewAsync.asData?.value?.unreadNotifications ?? 0;
 });
 
 /// Cart item count from projection
+/// Uses real-time stream for immediate updates
 final clientCartCountProvider = Provider<int>((ref) {
-  final viewState = ref.watch(clientViewProvider);
-  return viewState.view?.cartItemCount ?? 0;
+  final viewAsync = ref.watch(clientViewStreamProvider);
+  return viewAsync.asData?.value?.cartItemCount ?? 0;
 });
 
 /// Payment summary from projection

@@ -327,16 +327,55 @@ class _ClientHomeScreenState extends ConsumerState<ClientHomeScreen>
                 ),
               ),
               const SizedBox(width: 8),
+              // Chat button with unread message count badge
               GestureDetector(
                 onTap: () => context.push(Routes.chatList),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.chat_bubble_outline,
-                      color: AppColors.gray700,),
+                child: Stack(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.chat_bubble_outline,
+                          color: AppColors.gray700,),
+                    ),
+                    // Message Badge - Uses projection-based count
+                    Consumer(
+                      builder: (context, ref, child) {
+                        final unreadCount = ref.watch(clientUnreadMessagesProvider);
+
+                        if (unreadCount == 0) return const SizedBox.shrink();
+
+                        return Positioned(
+                          right: 6,
+                          top: 6,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            constraints: const BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
+                            ),
+                            decoration: const BoxDecoration(
+                              color: AppColors.peach,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                unreadCount > 99 ? '99+' : unreadCount.toString(),
+                                style: const TextStyle(
+                                  color: AppColors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
             ],
