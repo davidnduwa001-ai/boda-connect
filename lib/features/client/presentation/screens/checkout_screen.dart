@@ -534,13 +534,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       // Create booking
       debugPrint('BEFORE createBooking Cloud Function call');
-      await repository.createBooking(booking);
+      final createdBookingId = await repository.createBooking(booking);
       debugPrint('AFTER createBooking Cloud Function call');
+      debugPrint('Created booking ID: $createdBookingId');
 
       if (mounted) {
         // Navigate to payment success screen
         context.go('/payment-success', extra: {
-          'bookingId': bookingId,
+          'bookingId': createdBookingId,
           'paymentMethod': _selectedPaymentMethod,
           'totalAmount': widget.totalPrice,
         });
