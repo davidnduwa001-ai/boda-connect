@@ -470,7 +470,25 @@ export const getOrCreateConversation = functions
         // 3. Check for existing conversation
         const participants = [currentUserId, data.otherUserId].sort();
 
-        // Try conversations collection first
+        // Generate deterministic conversation ID to prevent race conditions
+        // Two users trying to create a conversation at the same time will use the same ID
+        const deterministicId = `conv_${participants[0]}_${participants[1]}`;
+
+        // First, check if conversation already exists with deterministic ID
+        const deterministicDoc = await db
+            .collection("conversations")
+            .doc(deterministicId)
+            .get();
+
+        if (deterministicDoc.exists) {
+          return {
+            success: true,
+            conversationId: deterministicId,
+            isNew: false,
+          };
+        }
+
+        // Try conversations collection with query (for legacy conversations)
         let existingQuery = await db
             .collection("conversations")
             .where("participants", "==", participants)
@@ -517,7 +535,7 @@ export const getOrCreateConversation = functions
           }
         }
 
-        // 4. Create new conversation
+        // 4. Create new conversation with deterministic ID
         const currentUserInfo = await getUserInfo(currentUserId);
         const otherUserInfo = await getUserInfo(data.otherUserId);
 
@@ -577,20 +595,27 @@ export const getOrCreateConversation = functions
             [currentUserId]: 0,
             [data.otherUserId]: 0,
           },
+          isActive: true,
         };
 
-        // Create in conversations collection (new structure)
-        const conversationRef = await db
+        // Use deterministic ID with set() to prevent race condition duplicates
+        // If two users try to create a conversation simultaneously, they'll
+        // write to the same document ID, preventing duplicates
+        const conversationRef = db
             .collection("conversations")
-            .add(conversationData);
+            .doc(deterministicId);
+
+        // Use set with merge:false to create new document
+        // If document already exists (race condition), this will overwrite but with same data
+        await conversationRef.set(conversationData);
 
         console.log(
-            `getOrCreateConversation: Created new conversation ${conversationRef.id}`
+            `getOrCreateConversation: Created new conversation ${deterministicId}`
         );
 
         return {
           success: true,
-          conversationId: conversationRef.id,
+          conversationId: deterministicId,
           isNew: true,
         };
       } catch (error) {

@@ -244,6 +244,10 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     return ConversationModel.fromFirestore(doc);
   }
 
+  /// UI-FIRST: Create conversation via Cloud Function
+  ///
+  /// DEPRECATED: Use getOrCreateConversation instead to prevent duplicates.
+  /// This method now delegates to getOrCreateConversation for safety.
   @override
   Future<ConversationModel> createConversation({
     required String clientId,
@@ -253,35 +257,24 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     String? clientPhoto,
     String? supplierPhoto,
   }) async {
-    final now = DateTime.now();
-    final conversationData = {
-      'participants': [clientId, supplierId],
-      'clientId': clientId,
-      'supplierId': supplierId,
-      'clientName': clientName,
-      'supplierName': supplierName,
-      'clientPhoto': clientPhoto,
-      'supplierPhoto': supplierPhoto,
-      'lastMessage': null,
-      'lastMessageAt': null,
-      'lastMessageSenderId': null,
-      'unreadCount': {
-        clientId: 0,
-        supplierId: 0,
-      },
-      'isActive': true,
-      'createdAt': Timestamp.fromDate(now),
-      'updatedAt': Timestamp.fromDate(now),
-    };
+    debugPrint('⚠️ createConversation called - delegating to getOrCreateConversation for safety');
 
-    // Use Cloud Function to create conversation for proper validation
-    // This ensures conversations are created in the correct collection
-    final docRef = await _conversationsCollection.add(conversationData);
-    final doc = await docRef.get();
-
-    return ConversationModel.fromFirestore(doc);
+    // Delegate to getOrCreateConversation to prevent duplicate conversations
+    // The Cloud Function handles the check-and-create atomically
+    return getOrCreateConversation(
+      clientId: clientId,
+      supplierId: supplierId,
+      clientName: clientName,
+      supplierName: supplierName,
+      clientPhoto: clientPhoto,
+      supplierPhoto: supplierPhoto,
+    );
   }
 
+  /// UI-FIRST: Get or create conversation via Cloud Function
+  ///
+  /// Uses the Cloud Function for atomic check-and-create to prevent
+  /// duplicate conversations between the same client and supplier.
   @override
   Future<ConversationModel> getOrCreateConversation({
     required String clientId,
@@ -292,159 +285,66 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     String? supplierPhoto,
     String? supplierAuthUid,
   }) async {
-    debugPrint('🔍 Looking for conversation: clientId=$clientId, supplierId=$supplierId, supplierAuthUid=$supplierAuthUid');
+    debugPrint('🔍 getOrCreateConversation via Cloud Function: clientId=$clientId, supplierId=$supplierId');
 
-    // Build list of supplier IDs to search for (document ID + auth UID for legacy)
-    final supplierIdsToSearch = <String>{supplierId};
-    if (supplierAuthUid != null && supplierAuthUid.isNotEmpty && supplierAuthUid != supplierId) {
-      supplierIdsToSearch.add(supplierAuthUid);
-    }
-
-    // Strategy 1: Try exact match on clientId and each possible supplierId
-    // Try both 'conversations' (new) and 'chats' (legacy) collections
-    for (final searchSupplierId in supplierIdsToSearch) {
-      // Try new 'conversations' collection
-      try {
-        final querySnapshot = await _conversationsCollection
-            .where('clientId', isEqualTo: clientId)
-            .where('supplierId', isEqualTo: searchSupplierId)
-            .limit(1)
-            .get();
-
-        if (querySnapshot.docs.isNotEmpty) {
-          debugPrint('✅ Found existing conversation (exact match with $searchSupplierId): ${querySnapshot.docs.first.id}');
-          return ConversationModel.fromFirestore(querySnapshot.docs.first);
-        }
-      } catch (e) {
-        debugPrint('⚠️ Exact match query failed for $searchSupplierId: $e');
-      }
-
-      // Fallback: Try legacy 'chats' collection
-      try {
-        final legacySnapshot = await _firestore.collection('chats')
-            .where('clientId', isEqualTo: clientId)
-            .where('supplierId', isEqualTo: searchSupplierId)
-            .limit(1)
-            .get();
-
-        if (legacySnapshot.docs.isNotEmpty) {
-          debugPrint('✅ Found existing conversation in legacy chats (exact match with $searchSupplierId): ${legacySnapshot.docs.first.id}');
-          return ConversationModel.fromFirestore(legacySnapshot.docs.first);
-        }
-      } catch (e) {
-        debugPrint('⚠️ Legacy chats exact match query failed for $searchSupplierId: $e');
-      }
-    }
-
-    // Strategy 2: Search by participants array - find any conversation with both users
-    // This handles cases where IDs might be stored differently (userId vs documentId)
     try {
-      debugPrint('🔍 Trying participants-based search in conversations collection...');
-      var participantsQuery = await _conversationsCollection
-          .where('participants', arrayContains: clientId)
-          .get();
+      // Use Cloud Function for atomic get-or-create operation
+      // This prevents race conditions and duplicate conversations
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('getOrCreateConversation');
 
-      // Check if any conversation contains the supplier in participants (using any supplier ID)
-      for (final doc in participantsQuery.docs) {
-        final data = doc.data() as Map<String, dynamic>?;
-        if (data != null) {
-          final participants = data['participants'] as List<dynamic>?;
-          final docSupplierId = data['supplierId'] as String?;
+      final result = await callable.call<Map<String, dynamic>>({
+        'otherUserId': supplierId,
+      });
 
-          // Check if any of the supplier IDs match
-          for (final searchSupplierId in supplierIdsToSearch) {
-            if (participants != null && participants.contains(searchSupplierId)) {
-              debugPrint('✅ Found conversation via participants ($searchSupplierId): ${doc.id}');
-              return ConversationModel.fromFirestore(doc);
-            }
-            if (docSupplierId == searchSupplierId) {
-              debugPrint('✅ Found conversation via supplierId match ($searchSupplierId): ${doc.id}');
-              return ConversationModel.fromFirestore(doc);
-            }
-          }
-        }
+      // Safely handle response
+      final rawData = result.data;
+      final Map<String, dynamic> data;
+      if (rawData is Map<String, dynamic>) {
+        data = rawData;
+      } else if (rawData is Map) {
+        data = Map<String, dynamic>.from(rawData);
+      } else {
+        throw Exception('Invalid response from getOrCreateConversation');
       }
 
-      // Try legacy 'chats' collection for participants-based search
-      debugPrint('🔍 Trying participants-based search in legacy chats collection...');
-      final legacyParticipantsQuery = await _firestore.collection('chats')
-          .where('participants', arrayContains: clientId)
-          .get();
-
-      for (final doc in legacyParticipantsQuery.docs) {
-        final data = doc.data();
-        final participants = data['participants'] as List<dynamic>?;
-        final docSupplierId = data['supplierId'] as String?;
-
-        for (final searchSupplierId in supplierIdsToSearch) {
-          if (participants != null && participants.contains(searchSupplierId)) {
-            debugPrint('✅ Found conversation via participants in legacy chats ($searchSupplierId): ${doc.id}');
-            return ConversationModel.fromFirestore(doc);
-          }
-          if (docSupplierId == searchSupplierId) {
-            debugPrint('✅ Found conversation via supplierId match in legacy chats ($searchSupplierId): ${doc.id}');
-            return ConversationModel.fromFirestore(doc);
-          }
-        }
+      if (data['success'] != true) {
+        throw Exception(data['error'] ?? 'Failed to get or create conversation');
       }
 
-      // Strategy 3: Search from CLIENT's perspective (security rules require authenticated user in participants)
-      // Query all conversations where CLIENT is a participant, then filter for matching supplier
-      debugPrint('🔍 Trying client-based search for conversations with any of: $supplierIdsToSearch');
-      final clientQuery = await _conversationsCollection
-          .where('participants', arrayContains: clientId)
-          .get();
+      final conversationId = data['conversationId'] as String;
+      final isNew = data['isNew'] as bool? ?? false;
 
-      for (final doc in clientQuery.docs) {
-        final data = doc.data() as Map<String, dynamic>?;
-        if (data != null) {
-          final participants = data['participants'] as List<dynamic>?;
-          final docSupplierId = data['supplierId'] as String?;
+      debugPrint('${isNew ? '📝 Created new' : '✅ Found existing'} conversation: $conversationId');
 
-          // Check if any of the supplier IDs match
-          for (final searchSupplierId in supplierIdsToSearch) {
-            if ((participants != null && participants.contains(searchSupplierId)) ||
-                docSupplierId == searchSupplierId) {
-              debugPrint('✅ Found conversation via client-based search ($searchSupplierId): ${doc.id}');
-              return ConversationModel.fromFirestore(doc);
-            }
-          }
-        }
+      // Fetch the full conversation document
+      // Try conversations collection first, then legacy chats
+      var doc = await _conversationsCollection.doc(conversationId).get();
+      if (!doc.exists) {
+        doc = await _firestore.collection('chats').doc(conversationId).get();
       }
 
-      // Also try legacy 'chats' collection with client-based search
-      debugPrint('🔍 Trying client-based search in legacy chats...');
-      final legacyClientQuery = await _firestore.collection('chats')
-          .where('participants', arrayContains: clientId)
-          .get();
-
-      for (final doc in legacyClientQuery.docs) {
-        final data = doc.data();
-        final participants = data['participants'] as List<dynamic>?;
-        final docSupplierId = data['supplierId'] as String?;
-
-        for (final searchSupplierId in supplierIdsToSearch) {
-          if ((participants != null && participants.contains(searchSupplierId)) ||
-              docSupplierId == searchSupplierId) {
-            debugPrint('✅ Found conversation via client-based search in legacy chats ($searchSupplierId): ${doc.id}');
-            return ConversationModel.fromFirestore(doc);
-          }
-        }
+      if (!doc.exists) {
+        // This shouldn't happen, but handle gracefully
+        throw Exception('Conversation created but not found: $conversationId');
       }
+
+      return ConversationModel.fromFirestore(doc);
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('⚠️ getOrCreateConversation Cloud Function error: ${e.code} - ${e.message}');
+
+      // Translate error codes
+      if (e.code == 'unauthenticated') {
+        throw Exception('Sessão expirada. Por favor, faça login novamente.');
+      } else if (e.code == 'invalid-argument') {
+        throw Exception(e.message ?? 'Dados inválidos');
+      }
+
+      throw Exception(e.message ?? 'Erro ao criar conversa');
     } catch (e) {
-      debugPrint('⚠️ Participants query failed: $e');
+      debugPrint('⚠️ getOrCreateConversation error: $e');
+      throw Exception('Erro ao criar conversa: $e');
     }
-
-    // If still not found, create new conversation (always use document ID for new ones)
-    debugPrint('📝 No existing conversation found, creating new one between $clientId and $supplierId');
-    return createConversation(
-      clientId: clientId,
-      supplierId: supplierId,
-      clientName: clientName,
-      supplierName: supplierName,
-      clientPhoto: clientPhoto,
-      supplierPhoto: supplierPhoto,
-    );
   }
 
   @override
