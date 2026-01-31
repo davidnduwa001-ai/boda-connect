@@ -27,13 +27,20 @@ class _BodaConnectAppState extends ConsumerState<BodaConnectApp> {
   @override
   void initState() {
     super.initState();
-    // Defer heavy initialization to after first frame renders
+    // Defer ALL ref usage to after first frame renders
+    // This is required because ref.listenManual cannot be called in initState
+    // before the widget is mounted to ProviderScope
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupAuthSubscription();
       if (!_servicesInitialized) {
         _initializeServicesDeferred();
       }
     });
+  }
 
+  /// Setup auth state subscription for push notifications
+  /// Must be called after widget is mounted (not in initState directly)
+  void _setupAuthSubscription() {
     _authSubscription = ref.listenManual<AuthState>(authProvider, (previous, next) {
       final notifier = ref.read(pushNotificationProvider.notifier);
 
