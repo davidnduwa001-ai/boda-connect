@@ -513,6 +513,32 @@ class SupplierStatsService {
 
   // ==================== SYNC & MAINTENANCE ====================
 
+  /// Check if supplier has zero stats and trigger sync if needed
+  /// Returns true if a sync was performed
+  Future<bool> syncIfZeroStats(String supplierId) async {
+    try {
+      final stats = await getSupplierStats(supplierId);
+
+      // Check if all meaningful stats are zero
+      final hasZeroStats = stats.viewCount == 0 &&
+          stats.leadCount == 0 &&
+          stats.favoriteCount == 0 &&
+          stats.completedBookings == 0 &&
+          stats.totalBookings == 0;
+
+      if (hasZeroStats) {
+        debugPrint('Supplier $supplierId has zero stats, triggering sync...');
+        await syncAllStats(supplierId);
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('Error checking/syncing zero stats: $e');
+      return false;
+    }
+  }
+
   /// Full stats sync - recalculates all counters from source data
   /// Use sparingly as it's resource-intensive
   Future<SupplierStatsModel> syncAllStats(String supplierId) async {

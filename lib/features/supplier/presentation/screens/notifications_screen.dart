@@ -289,7 +289,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         // Navigate to booking detail if bookingId is available
         final bookingId = notification.data?['bookingId'] as String?;
         if (bookingId != null) {
-          context.push('/supplier-order-detail', extra: bookingId);
+          context.push('/supplier-order-detail?bookingId=$bookingId');
         } else {
           context.push('/supplier-orders');
         }

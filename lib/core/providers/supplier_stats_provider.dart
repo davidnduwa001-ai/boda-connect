@@ -60,11 +60,15 @@ class SupplierStatsNotifier extends StateNotifier<SupplierStatsState> {
 
   SupplierStatsService get _service => _ref.read(supplierStatsServiceProvider);
 
+  bool _hasSyncedZeroStats = false;
+
   void _initStats() {
     // Start listening to real-time stats updates
     _statsSubscription = _service.streamSupplierStats(_supplierId).listen(
       (stats) {
         state = state.copyWith(stats: stats, isLoading: false, error: null);
+        // Check and sync if all stats are zero (only once per session)
+        _checkAndSyncZeroStats(stats);
       },
       onError: (e) {
         state = state.copyWith(error: e.toString(), isLoading: false);
@@ -73,6 +77,23 @@ class SupplierStatsNotifier extends StateNotifier<SupplierStatsState> {
 
     // Load detailed stats
     _loadDetailedStats();
+  }
+
+  /// Check if stats are all zero and trigger a sync if needed
+  void _checkAndSyncZeroStats(SupplierStatsModel stats) {
+    if (_hasSyncedZeroStats) return;
+
+    final hasZeroStats = stats.viewCount == 0 &&
+        stats.leadCount == 0 &&
+        stats.favoriteCount == 0 &&
+        stats.completedBookings == 0 &&
+        stats.totalBookings == 0;
+
+    if (hasZeroStats) {
+      _hasSyncedZeroStats = true;
+      // Trigger sync in background
+      _service.syncIfZeroStats(_supplierId);
+    }
   }
 
   Future<void> _loadDetailedStats() async {
@@ -113,6 +134,11 @@ class SupplierStatsNotifier extends StateNotifier<SupplierStatsState> {
     } catch (e) {
       state = state.copyWith(error: e.toString(), isLoading: false);
     }
+  }
+
+  /// Manually trigger sync if stats are zero
+  Future<bool> syncIfZeroStats() async {
+    return await _service.syncIfZeroStats(_supplierId);
   }
 
   /// Track a profile view
@@ -249,4 +275,11 @@ final favoriteCountProvider = FutureProvider.family<int, String>((ref, supplierI
 final supplierStatsStreamProvider = StreamProvider.family<SupplierStatsModel, String>((ref, supplierId) {
   final service = ref.read(supplierStatsServiceProvider);
   return service.streamSupplierStats(supplierId);
+});
+
+/// Provider for triggering zero-stats sync
+/// Use this when you need to manually trigger a sync check
+final syncZeroStatsProvider = FutureProvider.family<bool, String>((ref, supplierId) async {
+  final service = ref.read(supplierStatsServiceProvider);
+  return await service.syncIfZeroStats(supplierId);
 });
