@@ -121,6 +121,14 @@ abstract class ChatRepository {
     required String messageId,
   });
 
+  /// Update quote status in a message
+  ResultFutureVoid updateQuoteStatus({
+    required String conversationId,
+    required String messageId,
+    required String status,
+    String? rejectionReason,
+  });
+
   /// Get unread message count for user
   ResultFuture<int> getUnreadCount(String userId);
 

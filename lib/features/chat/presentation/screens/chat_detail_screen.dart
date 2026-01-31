@@ -1695,9 +1695,97 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
 
   /// Handle rejecting a proposal
   Future<void> _handleRejectProposal(ChatMessage message) async {
-    // TODO: Implement reject proposal flow
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Funcionalidade de rejeitar proposta em desenvolvimento')),
+    final reasonController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.close, color: AppColors.error),
+            ),
+            const SizedBox(width: 12),
+            const Text('Rejeitar Proposta'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Tem certeza que deseja rejeitar esta proposta?',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              maxLines: 2,
+              decoration: InputDecoration(
+                labelText: 'Motivo (opcional)',
+                hintText: 'Ex: Preço muito alto, data não disponível...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: AppColors.white,
+            ),
+            child: const Text('Rejeitar'),
+          ),
+        ],
+      ),
+    );
+
+    final reason = reasonController.text.trim();
+    reasonController.dispose();
+
+    if (confirmed != true || !mounted) return;
+
+    final conversationId = _actualConversationId;
+    if (conversationId == null) return;
+
+    // Update the quote status in Firestore
+    final result = await ref.read(chatRepositoryProvider).updateQuoteStatus(
+      conversationId: conversationId,
+      messageId: message.id,
+      status: 'rejected',
+      rejectionReason: reason.isNotEmpty ? reason : null,
+    );
+
+    if (!mounted) return;
+
+    result.fold(
+      (failure) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao rejeitar proposta: ${failure.message}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      },
+      (_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Proposta rejeitada'),
+            backgroundColor: AppColors.gray700,
+          ),
+        );
+      },
     );
   }
 

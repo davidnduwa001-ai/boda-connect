@@ -330,6 +330,26 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Future<Either<Failure, void>> updateQuoteStatus({
+    required String conversationId,
+    required String messageId,
+    required String status,
+    String? rejectionReason,
+  }) async {
+    try {
+      await _remoteDataSource.updateQuoteStatus(
+        conversationId: conversationId,
+        messageId: messageId,
+        status: status,
+        rejectionReason: rejectionReason,
+      );
+      return const Right(null);
+    } catch (e) {
+      return Left(_handleError(e));
+    }
+  }
+
+  @override
   Future<Either<Failure, int>> getUnreadCount(String userId) async {
     try {
       final count = await _remoteDataSource.getUnreadCount(userId);

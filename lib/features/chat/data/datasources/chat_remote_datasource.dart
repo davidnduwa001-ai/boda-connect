@@ -82,6 +82,14 @@ abstract class ChatRemoteDataSource {
     required String messageId,
   });
 
+  /// Update quote status in a message
+  Future<void> updateQuoteStatus({
+    required String conversationId,
+    required String messageId,
+    required String status,
+    String? rejectionReason,
+  });
+
   /// Get unread message count for user
   ///
   /// @deprecated UI-FIRST VIOLATION: Use clientUnreadMessagesProvider or
@@ -655,6 +663,24 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     await messagesRef.doc(messageId).update({
       'isDeleted': true,
     });
+  }
+
+  @override
+  Future<void> updateQuoteStatus({
+    required String conversationId,
+    required String messageId,
+    required String status,
+    String? rejectionReason,
+  }) async {
+    final messagesRef = await _getMessagesCollectionRef(conversationId);
+    final updateData = <String, dynamic>{
+      'quoteData.status': status,
+    };
+    if (rejectionReason != null) {
+      updateData['quoteData.rejectionReason'] = rejectionReason;
+    }
+    await messagesRef.doc(messageId).update(updateData);
+    debugPrint('✅ Quote status updated to $status for message $messageId');
   }
 
   @override
