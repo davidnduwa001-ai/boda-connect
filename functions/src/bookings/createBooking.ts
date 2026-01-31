@@ -553,7 +553,7 @@ export const createBooking = functions
                   .add({
                     date: eventDateTimestamp,
                     dateString: dateStr,
-                    reason: `Pedido de Cliente`,
+                    reason: "Pedido de Cliente",
                     type: "requested", // Pending booking = requested
                     bookingId: bookingRef.id,
                     clientId: clientId,
