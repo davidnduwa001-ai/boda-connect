@@ -18,7 +18,6 @@
  */
 
 import Stripe from "stripe";
-import * as functions from "firebase-functions/v1";
 import {
   PaymentProvider,
   CreatePaymentParams,
@@ -34,19 +33,12 @@ import {createLogger} from "../../common/logger";
 
 const logger = createLogger("payment", "StripeProvider");
 
-// Stripe configuration from environment or functions.config() fallback
-// This allows both .env files and `firebase functions:config:set stripe.secret_key=...`
-const getStripeConfig = () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const config = (functions as any).config?.() || {};
-  const stripeConfig = config.stripe || {};
-  return {
-    secretKey: process.env.STRIPE_SECRET_KEY || stripeConfig.secret_key || "",
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || stripeConfig.webhook_secret || "",
-  };
+// Stripe configuration from environment variables (.env file)
+// Firebase Functions automatically loads .env files during deployment
+const STRIPE_CONFIG = {
+  secretKey: process.env.STRIPE_SECRET_KEY || "",
+  webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
 };
-
-const STRIPE_CONFIG = getStripeConfig();
 
 /**
  * Stripe Payment Provider Implementation
