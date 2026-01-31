@@ -1248,6 +1248,33 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
 
   // ==================== STATISTICS SECTION ====================
   Widget _buildStatisticsSection(SupplierModel supplier) {
+    // Use real-time stats provider for accurate counts
+    final statsAsync = ref.watch(supplierStatsStreamProvider(supplier.id));
+
+    return statsAsync.when(
+      loading: () => _buildStatisticsContent(
+        viewCount: supplier.viewCount,
+        favoriteCount: supplier.favoriteCount,
+        completedBookings: supplier.completedBookings,
+      ),
+      error: (_, __) => _buildStatisticsContent(
+        viewCount: supplier.viewCount,
+        favoriteCount: supplier.favoriteCount,
+        completedBookings: supplier.completedBookings,
+      ),
+      data: (stats) => _buildStatisticsContent(
+        viewCount: stats.viewCount,
+        favoriteCount: stats.favoriteCount,
+        completedBookings: stats.completedBookings,
+      ),
+    );
+  }
+
+  Widget _buildStatisticsContent({
+    required int viewCount,
+    required int favoriteCount,
+    required int completedBookings,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1264,7 +1291,7 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
             Expanded(
               child: _buildStatCard(
                 icon: Icons.visibility_outlined,
-                value: '${supplier.viewCount}',
+                value: '$viewCount',
                 label: 'Visualizações',
                 color: AppColors.info,
               ),
@@ -1273,7 +1300,7 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
             Expanded(
               child: _buildStatCard(
                 icon: Icons.favorite_outline,
-                value: '${supplier.favoriteCount}',
+                value: '$favoriteCount',
                 label: 'Favoritos',
                 color: AppColors.error,
               ),
@@ -1282,7 +1309,7 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
             Expanded(
               child: _buildStatCard(
                 icon: Icons.check_circle_outline,
-                value: '${supplier.completedBookings}',
+                value: '$completedBookings',
                 label: 'Reservas',
                 color: AppColors.success,
               ),
