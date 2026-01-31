@@ -480,88 +480,95 @@ final supplierViewStreamProvider = StreamProvider<SupplierView?>((ref) {
 });
 
 /// Pending bookings from projection (for "Pedidos Pendentes")
-/// Filters out invalid bookings (totalAmount = 0 or empty bookingId)
+/// Uses real-time stream for immediate updates
 final supplierPendingBookingsProvider = Provider<List<SupplierBookingSummary>>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  final bookings = viewState.view?.pendingBookings ?? [];
+  final viewAsync = ref.watch(supplierViewStreamProvider);
+  final bookings = viewAsync.asData?.value?.pendingBookings ?? [];
   // Filter out invalid/corrupted bookings (only check for valid bookingId)
   return bookings.where((b) => b.bookingId.isNotEmpty).toList();
 });
 
 /// Confirmed bookings from projection
-/// Filters out invalid bookings (totalAmount = 0 or empty bookingId)
+/// Uses real-time stream for immediate updates
 final supplierConfirmedBookingsProvider = Provider<List<SupplierBookingSummary>>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  final bookings = viewState.view?.confirmedBookings ?? [];
+  final viewAsync = ref.watch(supplierViewStreamProvider);
+  final bookings = viewAsync.asData?.value?.confirmedBookings ?? [];
   // Filter out invalid/corrupted bookings (only check for valid bookingId)
   return bookings.where((b) => b.bookingId.isNotEmpty).toList();
 });
 
 /// Recent bookings from projection (for "Pedidos Recentes")
-/// Filters out invalid bookings (totalAmount = 0 or empty bookingId)
+/// Uses real-time stream for immediate updates
 final supplierRecentBookingsProvider = Provider<List<SupplierBookingSummary>>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  final bookings = viewState.view?.recentBookings ?? [];
+  final viewAsync = ref.watch(supplierViewStreamProvider);
+  final bookings = viewAsync.asData?.value?.recentBookings ?? [];
   // Filter out invalid/corrupted bookings (only check for valid bookingId)
   return bookings.where((b) => b.bookingId.isNotEmpty).toList();
 });
 
 /// Upcoming events from projection (for "Próximos Eventos")
-/// Filters out invalid events (empty bookingId)
+/// Uses real-time stream for immediate updates
 final supplierUpcomingEventsProvider = Provider<List<SupplierEventSummary>>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  final events = viewState.view?.upcomingEvents ?? [];
+  final viewAsync = ref.watch(supplierViewStreamProvider);
+  final events = viewAsync.asData?.value?.upcomingEvents ?? [];
   // Filter out invalid/corrupted events that failed to create properly
   return events.where((e) => e.bookingId.isNotEmpty).toList();
 });
 
 /// Dashboard stats from projection
+/// Uses real-time stream for immediate updates
 final supplierDashboardStatsProvider = Provider<SupplierDashboardStats>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.dashboardStats ?? const SupplierDashboardStats();
+  final viewAsync = ref.watch(supplierViewStreamProvider);
+  return viewAsync.asData?.value?.dashboardStats ?? const SupplierDashboardStats();
 });
 
 /// Unread message count from projection (for badges)
+/// Uses real-time stream for immediate updates
 final supplierUnreadMessagesProvider = Provider<int>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.unreadMessages ?? 0;
+  final viewAsync = ref.watch(supplierViewStreamProvider);
+  return viewAsync.asData?.value?.unreadMessages ?? 0;
 });
 
 /// Unread notification count from projection (for badges)
-/// UI-FIRST: Uses projection instead of direct Firestore query
+/// Uses real-time stream for immediate updates
 final supplierUnreadNotificationsProvider = Provider<int>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.unreadNotifications ?? 0;
+  final viewAsync = ref.watch(supplierViewStreamProvider);
+  return viewAsync.asData?.value?.unreadNotifications ?? 0;
 });
 
 /// Pending bookings count from projection (for badges)
+/// Uses real-time stream for immediate updates
 final supplierPendingCountProvider = Provider<int>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.pendingBookingsCount ?? 0;
+  final viewAsync = ref.watch(supplierViewStreamProvider);
+  return viewAsync.asData?.value?.pendingBookingsCount ?? 0;
 });
 
 /// Earnings summary from projection
+/// Uses real-time stream for immediate updates
 final supplierEarningsSummaryProvider = Provider<SupplierEarningsSummary>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.earningsSummary ?? const SupplierEarningsSummary();
+  final viewAsync = ref.watch(supplierViewStreamProvider);
+  return viewAsync.asData?.value?.earningsSummary ?? const SupplierEarningsSummary();
 });
 
 /// Availability summary from projection
+/// Uses real-time stream for immediate updates
 final supplierAvailabilitySummaryProvider = Provider<SupplierAvailabilitySummary>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.availabilitySummary ?? const SupplierAvailabilitySummary();
+  final viewAsync = ref.watch(supplierViewStreamProvider);
+  return viewAsync.asData?.value?.availabilitySummary ?? const SupplierAvailabilitySummary();
 });
 
 /// Blocked dates from projection (for calendar)
+/// Uses real-time stream for immediate updates
 final supplierBlockedDatesFromViewProvider = Provider<List<SupplierBlockedDateSummary>>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.blockedDates ?? [];
+  final viewAsync = ref.watch(supplierViewStreamProvider);
+  return viewAsync.asData?.value?.blockedDates ?? [];
 });
 
 /// Account flags from projection (for alerts/warnings)
+/// Uses real-time stream for immediate updates
 final supplierAccountFlagsProvider = Provider<SupplierAccountFlags>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.accountFlags ?? const SupplierAccountFlags();
+  final viewAsync = ref.watch(supplierViewStreamProvider);
+  return viewAsync.asData?.value?.accountFlags ?? const SupplierAccountFlags();
 });
 
 /// Is supplier bookable (from projection account flags)
