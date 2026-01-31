@@ -20,14 +20,21 @@ class BookingRepository {
   /// Create a new booking via Cloud Function
   /// Server handles validation, conflict checking, and stats updates
   Future<String> createBooking(BookingModel booking) async {
-    // Validate event date is not blocked (client-side pre-check)
-    final isBlocked = await _blockedDatesService.isDateBlocked(
-      booking.supplierId,
-      booking.eventDate,
-    );
+    Log.i('BookingRepository.createBooking: Starting...');
 
-    if (isBlocked) {
-      throw Exception('Esta data está indisponível. O fornecedor bloqueou esta data.');
+    // Validate event date is not blocked (client-side pre-check)
+    try {
+      final isBlocked = await _blockedDatesService.isDateBlocked(
+        booking.supplierId,
+        booking.eventDate,
+      );
+
+      if (isBlocked) {
+        throw Exception('Esta data está indisponível. O fornecedor bloqueou esta data.');
+      }
+    } catch (e) {
+      Log.fail('BookingRepository: Blocked date check failed: $e');
+      // Continue anyway - let Cloud Function do the final check
     }
 
     try {
