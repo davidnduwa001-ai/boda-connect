@@ -389,14 +389,31 @@ export const sendMessage = functions
           messageType === "file" ? "📎 Arquivo" : "";
 
         console.log("sendMessage: Updating conversation...");
-        await conversationRef.update({
+
+        // Build update data - safely handle unreadCount for legacy documents
+        const updateData: Record<string, unknown> = {
           lastMessage: lastMessagePreview,
           lastMessageAt: now,
           lastMessageSenderId: senderId,
           updatedAt: now,
-          // Increment unread count for receiver
-          [`unreadCount.${receiverId}`]: admin.firestore.FieldValue.increment(1),
-        });
+        };
+
+        // Only add unreadCount increment if receiverId is valid
+        if (receiverId && typeof receiverId === "string" && receiverId.length > 0) {
+          updateData[`unreadCount.${receiverId}`] =
+            admin.firestore.FieldValue.increment(1);
+        }
+
+        try {
+          await conversationRef.update(updateData);
+        } catch (updateError) {
+          // If update fails (e.g., document doesn't exist), try set with merge
+          console.warn(
+              "sendMessage: update failed, trying set with merge:",
+              updateError instanceof Error ? updateError.message : updateError
+          );
+          await conversationRef.set(updateData, {merge: true});
+        }
 
         console.log(
             `sendMessage: SUCCESS - Message ${messageRef.id} sent in conversation ${data.conversationId}`
@@ -408,10 +425,24 @@ export const sendMessage = functions
         };
       } catch (error) {
         // Log detailed error information
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        let errorMessage: string;
+        if (error instanceof Error) {
+          errorMessage = error.message || error.name || "Unknown Error";
+        } else if (typeof error === "string") {
+          errorMessage = error;
+        } else {
+          try {
+            errorMessage = JSON.stringify(error);
+          } catch {
+            errorMessage = String(error) || "Unknown error";
+          }
+        }
         const errorStack = error instanceof Error ? error.stack : undefined;
+        const errorCode = (error as {code?: string})?.code;
+
         console.error("sendMessage ERROR:", {
           error: errorMessage,
+          code: errorCode,
           stack: errorStack,
           conversationId: data.conversationId,
           senderId: context.auth?.uid,
@@ -422,10 +453,12 @@ export const sendMessage = functions
           throw error;
         }
 
-        throw new functions.https.HttpsError(
-            "internal",
-            `Erro ao enviar mensagem: ${errorMessage}`
-        );
+        // Ensure we always have a meaningful error message
+        const finalMessage = errorMessage && errorMessage !== "Unknown error"
+          ? `Erro ao enviar mensagem: ${errorMessage}`
+          : "Erro ao enviar mensagem. Tente novamente.";
+
+        throw new functions.https.HttpsError("internal", finalMessage);
       }
     });
 
