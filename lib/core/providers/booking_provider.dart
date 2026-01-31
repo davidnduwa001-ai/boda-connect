@@ -58,8 +58,9 @@ class BookingState {
       .toList();
 
   List<BookingModel> get pastClientBookings => clientBookings
-      .where((b) => b.status == BookingStatus.completed || 
-                    b.status == BookingStatus.cancelled)
+      .where((b) => b.status == BookingStatus.completed ||
+                    b.status == BookingStatus.cancelled ||
+                    b.status == BookingStatus.rejected)
       .toList();
 
   List<BookingModel> get pendingSupplierBookings => supplierBookings
@@ -592,6 +593,7 @@ final supplierBookingStatsProvider = Provider<Map<String, int>>((ref) {
     'confirmed': bookings.where((b) => b.status == BookingStatus.confirmed).length,
     'completed': bookings.where((b) => b.status == BookingStatus.completed).length,
     'cancelled': bookings.where((b) => b.status == BookingStatus.cancelled).length,
+    'rejected': bookings.where((b) => b.status == BookingStatus.rejected).length,
   };
 });
 

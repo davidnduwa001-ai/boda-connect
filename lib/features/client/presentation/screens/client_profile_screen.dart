@@ -298,8 +298,10 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
     final favoritesState = ref.watch(favoritesProvider);
     final authState = ref.watch(authProvider);
 
-    // Count bookings (all non-cancelled)
-    final bookingsCount = bookings.where((b) => b.status != BookingStatus.cancelled).length;
+    // Count bookings (exclude cancelled and rejected)
+    final bookingsCount = bookings.where((b) =>
+        b.status != BookingStatus.cancelled &&
+        b.status != BookingStatus.rejected).length;
 
     // Count favorites
     final favoritesCount = favoritesState.favoriteSuppliers.length;

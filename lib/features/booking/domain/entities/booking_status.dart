@@ -15,6 +15,9 @@ enum BookingStatus {
   /// Booking has been cancelled by either party
   cancelled,
 
+  /// Booking was rejected by the supplier (declined request)
+  rejected,
+
   /// Booking is under dispute (issue raised by either party)
   disputed,
 
@@ -37,6 +40,8 @@ extension BookingStatusExtension on BookingStatus {
         return 'Concluído';
       case BookingStatus.cancelled:
         return 'Cancelado';
+      case BookingStatus.rejected:
+        return 'Recusado';
       case BookingStatus.disputed:
         return 'Em Disputa';
       case BookingStatus.refunded:
@@ -58,6 +63,7 @@ extension BookingStatusExtension on BookingStatus {
   bool get isFinal {
     return this == BookingStatus.completed ||
            this == BookingStatus.cancelled ||
+           this == BookingStatus.rejected ||
            this == BookingStatus.disputed ||
            this == BookingStatus.refunded;
   }

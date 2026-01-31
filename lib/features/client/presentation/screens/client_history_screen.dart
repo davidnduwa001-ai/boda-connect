@@ -16,11 +16,12 @@ class ClientHistoryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final bookings = ref.watch(clientBookingsProvider);
 
-    // Filter only completed and cancelled bookings (history)
+    // Filter only completed, cancelled, and rejected bookings (history)
     final historyBookings = bookings
         .where((b) =>
             b.status == BookingStatus.completed ||
-            b.status == BookingStatus.cancelled)
+            b.status == BookingStatus.cancelled ||
+            b.status == BookingStatus.rejected)
         .toList();
 
     // Sort by most recent first
