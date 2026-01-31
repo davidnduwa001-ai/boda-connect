@@ -120,6 +120,8 @@ class BookingRemoteDataSourceImpl implements BookingRemoteDataSource {
         'eventLocation': booking.eventLocation,
         'guestCount': booking.guestCount,
         'clientRequestId': booking.id, // Use the client-generated ID for idempotency
+        'totalPrice': booking.totalPrice, // Send price for server validation
+        'packageName': booking.packageName, // Include package name for reference
       });
 
       final data = result.data;

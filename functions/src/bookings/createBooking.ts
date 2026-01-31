@@ -42,6 +42,8 @@ interface CreateBookingRequest {
   eventLocation?: string;
   guestCount?: number;
   clientRequestId?: string; // For idempotency
+  totalPrice?: number; // Client-provided price for validation/fallback
+  packageName?: string; // Package name from client
 }
 
 interface CreateBookingResponse {
@@ -478,6 +480,22 @@ export const createBooking = functions
               );
               const eventDateTimestamp = admin.firestore.Timestamp.fromDate(eventDateObj);
 
+              // Determine the price: use package price if available, otherwise use client-provided price
+              // Server authority: package price takes precedence, but client price is a valid fallback
+              const packagePrice = packageData.price || 0;
+              const clientPrice = data.totalPrice || 0;
+              const finalPrice = packagePrice > 0 ? packagePrice : clientPrice;
+
+              // Log price discrepancy for debugging (if both exist and differ)
+              if (packagePrice > 0 && clientPrice > 0 && packagePrice !== clientPrice) {
+                logger.warn("price_mismatch", {
+                  packagePrice,
+                  clientPrice,
+                  finalPrice,
+                  packageId: data.packageId,
+                });
+              }
+
               const bookingData = {
                 id: bookingRef.id,
                 clientId: clientId,
@@ -488,8 +506,8 @@ export const createBooking = functions
                 supplierName: supplier.businessName || supplier.name || "Fornecedor",
                 supplierPhone: supplier.phone || "",
                 packageId: data.packageId,
-                packageName: packageData.name || "Pacote",
-                packagePrice: packageData.price || 0,
+                packageName: packageData.name || data.packageName || "Pacote",
+                packagePrice: finalPrice,
                 eventDate: eventDateTimestamp,
                 eventTime: data.startTime || null,
                 startTime: data.startTime || null,
@@ -499,7 +517,7 @@ export const createBooking = functions
                 guestCount: data.guestCount || null,
                 notes: data.notes || null,
                 status: "pending",
-                totalPrice: packageData.price || 0, // Use totalPrice for consistency
+                totalPrice: finalPrice, // Use determined price
                 paidAmount: 0,
                 platformFee: 0,
                 supplierEarnings: 0,
