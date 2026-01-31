@@ -286,17 +286,29 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       case NotificationType.newBooking:
       case NotificationType.bookingConfirmed:
       case NotificationType.bookingCancelled:
-        // Navigate to bookings/orders screen
-        // context.push('/supplier-orders');
+        // Navigate to booking detail if bookingId is available
+        final bookingId = notification.data?['bookingId'] as String?;
+        if (bookingId != null) {
+          context.push('/supplier-order-detail', extra: bookingId);
+        } else {
+          context.push('/supplier-orders');
+        }
         break;
       case NotificationType.newMessage:
         // Navigate to chat
-        // final chatId = notification.data?['chatId'];
-        // if (chatId != null) context.push('/chat-detail', extra: chatId);
+        final chatId = notification.data?['chatId'] as String?;
+        final senderId = notification.data?['senderId'] as String?;
+        final senderName = notification.data?['senderName'] as String? ?? 'Usuário';
+        if (chatId != null) {
+          final encodedName = Uri.encodeComponent(senderName);
+          context.push('/chat-detail?conversationId=$chatId&userId=$senderId&userName=$encodedName');
+        } else {
+          context.push('/chat-list');
+        }
         break;
       case NotificationType.newReview:
         // Navigate to reviews
-        // context.push('/supplier-reviews');
+        context.push('/supplier-reviews');
         break;
       case NotificationType.paymentReceived:
         // Navigate to revenue screen
