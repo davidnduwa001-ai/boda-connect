@@ -380,12 +380,107 @@ class _ClientBookingsScreenState extends ConsumerState<ClientBookingsScreen>
                     ),
                   ),
                 ],
+                // Show delete option for cancelled/rejected/completed bookings
+                if (_canHideBooking(booking.status)) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton.icon(
+                      onPressed: () => _handleHideBooking(booking),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Remover da lista'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.gray500,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  bool _canHideBooking(String status) {
+    return ['cancelled', 'rejected', 'completed', 'refunded'].contains(status);
+  }
+
+  Future<void> _handleHideBooking(ClientBookingSummary booking) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remover reserva'),
+        content: const Text(
+          'Deseja remover esta reserva da sua lista? '
+          'Esta ação não pode ser desfeita.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Remover'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: AppColors.peach),
+      ),
+    );
+
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('hideBookingFromView');
+      await callable.call<Map<String, dynamic>>({
+        'bookingId': booking.bookingId,
+      });
+
+      // Refresh bookings
+      await ref.read(clientViewProvider.notifier).refresh();
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reserva removida da lista'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message ?? 'Erro ao remover reserva'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Erro ao remover reserva'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildStatusBadge(String status) {

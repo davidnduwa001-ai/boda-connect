@@ -84,6 +84,12 @@ export async function rebuildClientView(
 
     for (const doc of bookingsSnapshot.docs) {
       const booking = doc.data();
+
+      // Skip bookings hidden by client
+      if (booking.hiddenByClient === true) {
+        continue;
+      }
+
       const supplierId = booking.supplierId as string;
 
       // Get supplier info (cached)

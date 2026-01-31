@@ -61,6 +61,11 @@ export {
   getClientBookingDetails,
 } from "./bookings/getClientBookings";
 
+// Hide Booking (SECURE - validates client ownership)
+export {
+  hideBookingFromView,
+} from "./bookings/hideBooking";
+
 // Chat/Messaging Cloud Functions (SECURE - validates participant access)
 export {
   sendMessage,
