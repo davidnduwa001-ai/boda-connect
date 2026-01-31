@@ -60,6 +60,27 @@ class BookingRepository {
       }
 
       final bookingId = data['bookingId'] as String;
+
+      // Update booking with customization details that the Cloud Function doesn't handle
+      // The Cloud Function creates the base booking with package price,
+      // we add the cart/checkout specific details (customizations, adjusted total price)
+      final updateData = <String, dynamic>{};
+
+      if (booking.selectedCustomizations.isNotEmpty) {
+        updateData['selectedCustomizations'] = booking.selectedCustomizations;
+      }
+
+      // Always update totalPrice if it differs from what Cloud Function set
+      // (Cloud Function uses package.price, but cart/checkout may have customizations)
+      if (booking.totalPrice > 0) {
+        updateData['totalPrice'] = booking.totalPrice;
+      }
+
+      if (updateData.isNotEmpty) {
+        updateData['updatedAt'] = FieldValue.serverTimestamp();
+        await FirebaseFirestore.instance.collection('bookings').doc(bookingId).update(updateData);
+      }
+
       Log.success('Booking created via Cloud Function: $bookingId');
 
       return bookingId;

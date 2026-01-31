@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/constants/dimensions.dart';
 import '../../../../core/constants/text_styles.dart';
@@ -406,44 +408,63 @@ class CartScreen extends ConsumerWidget {
         ),
       );
 
-      // Create bookings for each cart item
+      // Create bookings via Cloud Function for each cart item
       final repository = ref.read(cartRepositoryProvider);
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final createBookingFn = functions.httpsCallable('createBooking');
       final firestore = FirebaseFirestore.instance;
-      final auth = FirebaseAuth.instance;
-      final userId = auth.currentUser?.uid;
-
-      if (userId == null) throw Exception('Usuário não autenticado');
 
       int successCount = 0;
       int failureCount = 0;
+      final List<String> errors = [];
 
       for (final item in items) {
         try {
           final cartItem = item as CartItem;
 
-          // Create booking document
-          await firestore.collection('bookings').add({
-            'clientId': userId,
+          // Format event date as YYYY-MM-DD for Cloud Function
+          final eventDateStr = DateFormat('yyyy-MM-dd').format(cartItem.selectedDate);
+
+          // Call createBooking Cloud Function
+          // This ensures proper validation, rate limiting, and notifications
+          final result = await createBookingFn.call<Map<String, dynamic>>({
             'supplierId': cartItem.supplierId,
             'packageId': cartItem.packageId,
-            'packageName': cartItem.packageName,
-            'eventDate': Timestamp.fromDate(cartItem.selectedDate),
+            'eventDate': eventDateStr,
             'guestCount': cartItem.guestCount,
-            'selectedCustomizations': cartItem.selectedCustomizations,
-            'basePrice': cartItem.basePrice,
-            'customizationsPrice': cartItem.customizationsPrice,
-            'totalPrice': cartItem.totalPrice,
-            'status': 'pending',
-            'paymentStatus': 'pending',
-            'paymentMethod': 'Pendente',
-            'createdAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
+            'eventName': cartItem.packageName,
           });
 
-          successCount++;
+          final data = result.data is Map<String, dynamic>
+              ? result.data
+              : Map<String, dynamic>.from(result.data as Map);
+
+          if (data['success'] == true && data['bookingId'] != null) {
+            final bookingId = data['bookingId'] as String;
+
+            // Update booking with cart-specific details (customizations, prices)
+            // The Cloud Function creates the base booking, we add cart details
+            await firestore.collection('bookings').doc(bookingId).update({
+              'selectedCustomizations': cartItem.selectedCustomizations,
+              'basePrice': cartItem.basePrice,
+              'customizationsPrice': cartItem.customizationsPrice,
+              'totalPrice': cartItem.totalPrice,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+
+            successCount++;
+          } else {
+            failureCount++;
+            errors.add(data['error'] as String? ?? 'Erro desconhecido');
+          }
+        } on FirebaseFunctionsException catch (e) {
+          failureCount++;
+          debugPrint('Error creating booking: ${e.code} - ${e.message}');
+          errors.add(e.message ?? 'Erro ao criar reserva');
         } catch (e) {
           failureCount++;
-          print('Error creating booking: $e');
+          debugPrint('Error creating booking: $e');
+          errors.add(e.toString());
         }
       }
 
@@ -466,11 +487,21 @@ class CartScreen extends ConsumerWidget {
           );
           // Navigate to bookings screen
           context.push(Routes.clientBookings);
-        } else {
+        } else if (successCount > 0) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('$successCount reservas criadas, $failureCount falharam'),
               backgroundColor: AppColors.warning,
+            ),
+          );
+          // Still navigate since some succeeded
+          context.push(Routes.clientBookings);
+        } else {
+          // All failed - show first error
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errors.isNotEmpty ? errors.first : 'Erro ao criar reservas'),
+              backgroundColor: AppColors.error,
             ),
           );
         }
