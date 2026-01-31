@@ -274,6 +274,18 @@ service cloud.firestore {
 
     // Conversations collection - only participants can access
     match /conversations/{conversationId} {
+      // Helper to check if user's supplier doc ID is in participants
+      function isSupplierInConversationParticipants() {
+        return resource.data.participants.size() >= 1 &&
+          (
+            (exists(/databases/$(database)/documents/suppliers/$(resource.data.participants[0])) &&
+             get(/databases/$(database)/documents/suppliers/$(resource.data.participants[0])).data.userId == request.auth.uid) ||
+            (resource.data.participants.size() >= 2 &&
+             exists(/databases/$(database)/documents/suppliers/$(resource.data.participants[1])) &&
+             get(/databases/$(database)/documents/suppliers/$(resource.data.participants[1])).data.userId == request.auth.uid)
+          );
+      }
+
       // Allow read if authenticated OR if document doesn't exist (for existence checks)
       // The app checks if conversation exists in this collection before falling back to legacy chats
       allow read: if request.auth != null &&
@@ -281,7 +293,8 @@ service cloud.firestore {
          request.auth.uid in resource.data.participants ||
          request.auth.uid == resource.data.clientId ||
          (resource.data.keys().hasAny(['supplierId']) && isSupplierOwner(resource.data.supplierId)) ||
-         (resource.data.isSupport == true && request.auth.uid in resource.data.participants));
+         (resource.data.isSupport == true && request.auth.uid in resource.data.participants) ||
+         isSupplierInConversationParticipants());
 
       allow create: if request.auth != null &&
         request.auth.uid in request.resource.data.participants;
@@ -289,21 +302,37 @@ service cloud.firestore {
       allow update: if request.auth != null &&
         (request.auth.uid in resource.data.participants ||
          request.auth.uid == resource.data.clientId ||
-         (resource.data.keys().hasAny(['supplierId']) && isSupplierOwner(resource.data.supplierId)));
+         (resource.data.keys().hasAny(['supplierId']) && isSupplierOwner(resource.data.supplierId)) ||
+         isSupplierInConversationParticipants());
 
       // Conversation messages subcollection
       match /messages/{messageId} {
+        // Helper to check if user's supplier doc ID is in conversation participants
+        function isSupplierInConvMsgParticipants() {
+          let convDoc = get(/databases/$(database)/documents/conversations/$(conversationId)).data;
+          return convDoc.participants.size() >= 1 &&
+            (
+              (exists(/databases/$(database)/documents/suppliers/$(convDoc.participants[0])) &&
+               get(/databases/$(database)/documents/suppliers/$(convDoc.participants[0])).data.userId == request.auth.uid) ||
+              (convDoc.participants.size() >= 2 &&
+               exists(/databases/$(database)/documents/suppliers/$(convDoc.participants[1])) &&
+               get(/databases/$(database)/documents/suppliers/$(convDoc.participants[1])).data.userId == request.auth.uid)
+            );
+        }
+
         allow read: if request.auth != null &&
           (resource == null ||  // Message doesn't exist - allow check
            request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants ||
            request.auth.uid == get(/databases/$(database)/documents/conversations/$(conversationId)).data.clientId ||
            (get(/databases/$(database)/documents/conversations/$(conversationId)).data.keys().hasAny(['supplierId']) &&
-            isSupplierOwner(get(/databases/$(database)/documents/conversations/$(conversationId)).data.supplierId)));
+            isSupplierOwner(get(/databases/$(database)/documents/conversations/$(conversationId)).data.supplierId)) ||
+           isSupplierInConvMsgParticipants());
         allow create: if request.auth != null &&
           (request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants ||
            request.auth.uid == get(/databases/$(database)/documents/conversations/$(conversationId)).data.clientId ||
            (get(/databases/$(database)/documents/conversations/$(conversationId)).data.keys().hasAny(['supplierId']) &&
-            isSupplierOwner(get(/databases/$(database)/documents/conversations/$(conversationId)).data.supplierId)));
+            isSupplierOwner(get(/databases/$(database)/documents/conversations/$(conversationId)).data.supplierId)) ||
+           isSupplierInConvMsgParticipants());
       }
     }
 
