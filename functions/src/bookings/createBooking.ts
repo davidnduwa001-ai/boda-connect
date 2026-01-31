@@ -501,7 +501,7 @@ export const createBooking = functions
                 supplierPhone: supplier.phone || "",
                 packageId: data.packageId,
                 packageName: finalPackageName,
-                packagePrice: finalPrice,
+                packagePrice: packageData.price || finalPrice,
                 eventDate: eventDateTimestamp,
                 eventTime: data.startTime || null,
                 startTime: data.startTime || null,
@@ -520,6 +520,7 @@ export const createBooking = functions
                 createdBy: "cloud_function",
                 clientRequestId: data.clientRequestId || null,
                 isCustomOffer: isCustomOffer,
+                selectedCustomizations: data.selectedCustomizations || [],
               };
 
               await bookingRef.set(bookingData);

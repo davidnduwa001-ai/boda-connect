@@ -99,7 +99,8 @@ class BookingModel {
       eventLocation: data['eventLocation'] as String?,
       eventGeopoint: geoPoint,
       status: status,
-      totalPrice: (data['totalPrice'] as num?)?.toInt() ?? 0,
+      totalPrice: (data['totalPrice'] as num?)?.toInt() ??
+                  (data['totalAmount'] as num?)?.toInt() ?? 0,
       paidAmount: (data['paidAmount'] as num?)?.toInt() ?? 0,
       currency: data['currency'] as String? ?? 'AOA',
       payments: payments,
@@ -171,7 +172,8 @@ class BookingModel {
       eventLocation: data['eventLocation'] as String?,
       eventGeopoint: null, // GeoPoints not sent via Cloud Functions
       status: status,
-      totalPrice: (data['totalPrice'] as num?)?.toInt() ?? 0,
+      totalPrice: (data['totalPrice'] as num?)?.toInt() ??
+                  (data['totalAmount'] as num?)?.toInt() ?? 0,
       paidAmount: (data['paidAmount'] as num?)?.toInt() ?? 0,
       currency: data['currency'] as String? ?? 'AOA',
       payments: payments,
