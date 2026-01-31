@@ -171,16 +171,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           subtitle: 'Pagar em dinheiro no dia do evento',
           color: AppColors.warning,
         ),
-        if (kIsWeb) ...[
-          const SizedBox(height: AppDimensions.sm),
-          _buildPaymentOption(
-            id: 'stripe',
-            icon: Icons.credit_card,
-            title: 'Cartão (Stripe)',
-            subtitle: 'Pagar com cartão de crédito/débito',
-            color: const Color(0xFF635BFF),
-          ),
-        ],
+        const SizedBox(height: AppDimensions.sm),
+        _buildPaymentOption(
+          id: 'stripe',
+          icon: Icons.credit_card,
+          title: 'Cartão (Stripe)',
+          subtitle: kIsWeb
+              ? 'Pagar com cartão de crédito/débito'
+              : 'Pagar com cartão (abre no navegador)',
+          color: const Color(0xFF635BFF),
+        ),
       ],
     );
   }
@@ -454,20 +454,48 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
       final callable = functions.httpsCallable('createPaymentIntent');
 
+      // Build success/cancel URLs
+      String successUrl;
+      String cancelUrl;
+
+      if (kIsWeb) {
+        successUrl = '${Uri.base.origin}/payment/success?bookingId=${widget.bookingId}';
+        cancelUrl = '${Uri.base.origin}/payment/cancel?bookingId=${widget.bookingId}';
+      } else {
+        // For mobile, use the web app URL - user will complete in browser
+        const baseUrl = 'https://boda-connect-49eb9.web.app';
+        successUrl = '$baseUrl/payment/success?bookingId=${widget.bookingId}';
+        cancelUrl = '$baseUrl/payment/cancel?bookingId=${widget.bookingId}';
+      }
+
       final result = await callable.call<Map<String, dynamic>>({
         'bookingId': widget.bookingId,
         'amount': widget.amount,
         'paymentMethod': 'stripe',
-        'successUrl': '${Uri.base.origin}/payment/success?bookingId=${widget.bookingId}',
-        'cancelUrl': '${Uri.base.origin}/payment/cancel?bookingId=${widget.bookingId}',
+        'successUrl': successUrl,
+        'cancelUrl': cancelUrl,
       });
 
       final data = result.data;
       final checkoutUrl = data['checkoutUrl'] as String?;
 
       if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
-        // Redirect to Stripe Checkout using window.location.href
-        redirectToUrl(checkoutUrl);
+        if (kIsWeb) {
+          // On web, redirect in same window
+          redirectToUrl(checkoutUrl);
+        } else {
+          // On mobile, open in external browser
+          final uri = Uri.parse(checkoutUrl);
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+            // Navigate to pending/success screen while user completes payment
+            if (mounted) {
+              context.go('/payment-success?bookingId=${widget.bookingId}&method=stripe&amount=${widget.amount}&pending=true');
+            }
+          } else {
+            throw Exception('Não foi possível abrir o link de pagamento');
+          }
+        }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
