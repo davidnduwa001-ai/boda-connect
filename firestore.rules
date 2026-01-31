@@ -629,32 +629,6 @@ service cloud.firestore {
 
     // Custom offers collection
     match /custom_offers/{offerId} {
-      // Helper to check if user's supplier doc ID is in chat participants
-      function isSupplierInOfferChatParticipants() {
-        let chatDoc = get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data;
-        return chatDoc.participants.size() >= 1 &&
-          (
-            (exists(/databases/$(database)/documents/suppliers/$(chatDoc.participants[0])) &&
-             get(/databases/$(database)/documents/suppliers/$(chatDoc.participants[0])).data.userId == request.auth.uid) ||
-            (chatDoc.participants.size() >= 2 &&
-             exists(/databases/$(database)/documents/suppliers/$(chatDoc.participants[1])) &&
-             get(/databases/$(database)/documents/suppliers/$(chatDoc.participants[1])).data.userId == request.auth.uid)
-          );
-      }
-
-      // Helper for CREATE: check if user's supplier doc ID is in chat participants
-      function isSupplierInOfferChatParticipantsCreate() {
-        let chatDoc = get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data;
-        return chatDoc.participants.size() >= 1 &&
-          (
-            (exists(/databases/$(database)/documents/suppliers/$(chatDoc.participants[0])) &&
-             get(/databases/$(database)/documents/suppliers/$(chatDoc.participants[0])).data.userId == request.auth.uid) ||
-            (chatDoc.participants.size() >= 2 &&
-             exists(/databases/$(database)/documents/suppliers/$(chatDoc.participants[1])) &&
-             get(/databases/$(database)/documents/suppliers/$(chatDoc.participants[1])).data.userId == request.auth.uid)
-          );
-      }
-
       // Check if user owns a supplier whose document ID is the sellerId
       function isSellerOwner() {
         return request.auth.uid == resource.data.sellerId ||
@@ -669,43 +643,62 @@ service cloud.firestore {
            get(/databases/$(database)/documents/suppliers/$(request.resource.data.sellerId)).data.userId == request.auth.uid);
       }
 
-      // Check if user is a valid participant in the offer's chat (for CREATE)
-      function isOfferChatParticipantCreate() {
-        return request.resource.data.keys().hasAny(['chatId']) &&
-          (request.auth.uid in get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.participants ||
-           request.auth.uid == get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.clientId ||
-           (get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.keys().hasAny(['supplierId']) &&
-            isSupplierOwner(get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.supplierId)) ||
-           isSupplierInOfferChatParticipantsCreate());
+      // Check if user is in the chat/conversation (supports both collections)
+      function isInChatOrConversationCreate() {
+        let chatId = request.resource.data.chatId;
+        // Check chats collection first
+        return (exists(/databases/$(database)/documents/chats/$(chatId)) &&
+                request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants) ||
+               // Check conversations collection as fallback
+               (exists(/databases/$(database)/documents/conversations/$(chatId)) &&
+                request.auth.uid in get(/databases/$(database)/documents/conversations/$(chatId)).data.participants);
       }
 
-      // Allow reading if user is seller, buyer, or part of the chat (including supplier owner)
-      // Allow query evaluation by checking resource == null for non-existent documents
+      // Check if user's supplier doc is in chat/conversation participants
+      function isSupplierInChatOrConversationCreate() {
+        let chatId = request.resource.data.chatId;
+        // Try chats collection
+        let inChats = exists(/databases/$(database)/documents/chats/$(chatId)) &&
+          get(/databases/$(database)/documents/chats/$(chatId)).data.participants.size() >= 1 &&
+          (
+            (exists(/databases/$(database)/documents/suppliers/$(get(/databases/$(database)/documents/chats/$(chatId)).data.participants[0])) &&
+             get(/databases/$(database)/documents/suppliers/$(get(/databases/$(database)/documents/chats/$(chatId)).data.participants[0])).data.userId == request.auth.uid) ||
+            (get(/databases/$(database)/documents/chats/$(chatId)).data.participants.size() >= 2 &&
+             exists(/databases/$(database)/documents/suppliers/$(get(/databases/$(database)/documents/chats/$(chatId)).data.participants[1])) &&
+             get(/databases/$(database)/documents/suppliers/$(get(/databases/$(database)/documents/chats/$(chatId)).data.participants[1])).data.userId == request.auth.uid)
+          );
+        // Try conversations collection
+        let inConvs = exists(/databases/$(database)/documents/conversations/$(chatId)) &&
+          get(/databases/$(database)/documents/conversations/$(chatId)).data.participants.size() >= 1 &&
+          (
+            (exists(/databases/$(database)/documents/suppliers/$(get(/databases/$(database)/documents/conversations/$(chatId)).data.participants[0])) &&
+             get(/databases/$(database)/documents/suppliers/$(get(/databases/$(database)/documents/conversations/$(chatId)).data.participants[0])).data.userId == request.auth.uid) ||
+            (get(/databases/$(database)/documents/conversations/$(chatId)).data.participants.size() >= 2 &&
+             exists(/databases/$(database)/documents/suppliers/$(get(/databases/$(database)/documents/conversations/$(chatId)).data.participants[1])) &&
+             get(/databases/$(database)/documents/suppliers/$(get(/databases/$(database)/documents/conversations/$(chatId)).data.participants[1])).data.userId == request.auth.uid)
+          );
+        return inChats || inConvs;
+      }
+
+      // Allow reading if user is seller, buyer, or owns seller's supplier doc
       allow read: if request.auth != null &&
-        (resource == null ||  // Document doesn't exist - allow query evaluation
+        (resource == null ||
          request.auth.uid == resource.data.sellerId ||
          request.auth.uid == resource.data.buyerId ||
-         isSellerOwner() ||
-         (resource.data.keys().hasAny(['chatId']) &&
-          (request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants ||
-           request.auth.uid == get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.clientId ||
-           (get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.keys().hasAny(['supplierId']) &&
-            isSupplierOwner(get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.supplierId)) ||
-           isSupplierInOfferChatParticipants())));
+         isSellerOwner());
 
-      // Allow create if user is seller, buyer, owns the seller's supplier doc, or is in the chat
+      // Allow create if user is buyer OR owns seller's supplier doc OR is in chat/conversation
       allow create: if request.auth != null &&
         (request.auth.uid == request.resource.data.buyerId ||
          isSellerOwnerCreate() ||
-         isOfferChatParticipantCreate());
+         (request.resource.data.keys().hasAny(['chatId']) &&
+          (isInChatOrConversationCreate() || isSupplierInChatOrConversationCreate())));
 
-      // Allow update if user is seller (auth UID), buyer, or owns the seller's supplier doc
+      // Allow update if user is buyer OR owns seller's supplier doc
       allow update: if request.auth != null &&
         (request.auth.uid == resource.data.buyerId ||
-         isSellerOwner() ||
-         (resource.data.keys().hasAny(['chatId']) &&
-          (request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants ||
-           isSupplierInOfferChatParticipants())));
+         isSellerOwner());
+
       allow delete: if false;
     }
 
