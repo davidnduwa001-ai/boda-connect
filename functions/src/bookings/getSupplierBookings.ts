@@ -580,12 +580,12 @@ export const respondToBooking = functions
 
         await bookingRef.update(updates);
 
-        // 8.5 If confirming, block the date to prevent double-booking
+        // 8.5 If confirming, update or create blocked_date entry
         if (data.action === "confirm") {
           const eventDate = booking.eventDate?.toDate?.() || new Date(booking.eventDate);
           const dateStr = eventDate.toISOString().split("T")[0];
 
-          // Check if date is already blocked for this booking
+          // Check if date is already blocked for this booking (from pending booking creation)
           const existingBlock = await db
               .collection("suppliers")
               .doc(supplierId)
@@ -593,8 +593,21 @@ export const respondToBooking = functions
               .where("bookingId", "==", data.bookingId)
               .get();
 
-          if (existingBlock.empty) {
-            // Create blocked date entry
+          if (!existingBlock.empty) {
+            // Update existing entry from "requested" to "booking" (confirmed)
+            const batch = db.batch();
+            existingBlock.docs.forEach((doc) => {
+              batch.update(doc.ref, {
+                type: "booking",
+                reason: `Reserva confirmada: ${booking.eventName || booking.packageName || "Evento"}`,
+                updatedAt: now,
+                confirmedBy: context.auth?.uid || supplierId,
+              });
+            });
+            await batch.commit();
+            console.log(`Updated blocked_date to confirmed for booking ${data.bookingId}`);
+          } else {
+            // Create blocked date entry if it doesn't exist (legacy bookings)
             await db
                 .collection("suppliers")
                 .doc(supplierId)
@@ -609,7 +622,7 @@ export const respondToBooking = functions
                   createdAt: now,
                   createdBy: context.auth.uid,
                 });
-            console.log(`Blocked date ${dateStr} for confirmed booking ${data.bookingId}`);
+            console.log(`Created blocked date ${dateStr} for confirmed booking ${data.bookingId}`);
           }
         }
 

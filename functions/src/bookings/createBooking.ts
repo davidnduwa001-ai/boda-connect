@@ -544,6 +544,31 @@ export const createBooking = functions
                 createdAt: now,
               });
 
+              // 13. Add blocked_dates entry for the pending booking (shows in availability calendar)
+              const dateStr = data.eventDate; // Already in YYYY-MM-DD format
+              await db
+                  .collection("suppliers")
+                  .doc(data.supplierId)
+                  .collection("blocked_dates")
+                  .add({
+                    date: eventDateTimestamp,
+                    dateString: dateStr,
+                    reason: `Pedido de Cliente`,
+                    type: "requested", // Pending booking = requested
+                    bookingId: bookingRef.id,
+                    clientId: clientId,
+                    clientName: clientData?.displayName || clientData?.name || "Cliente",
+                    eventName: data.eventName || finalPackageName,
+                    createdAt: now,
+                    createdBy: "booking_created",
+                  });
+
+              logger.info("blocked_date_created_for_pending_booking", {
+                bookingId: bookingRef.id,
+                supplierId: data.supplierId,
+                date: dateStr,
+              });
+
               logger.operationSuccess("create_booking", {
                 bookingId: bookingRef.id,
                 supplierId: data.supplierId,

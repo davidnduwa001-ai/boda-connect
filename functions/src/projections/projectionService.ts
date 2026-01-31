@@ -611,7 +611,14 @@ async function getSupplierBlockedDates(
 
     return snapshot.docs.map((doc) => {
       const data = doc.data();
-      const type = data.type || "blocked";
+      let type = data.type || "blocked";
+
+      // Normalize type: "booking" and "confirmed" map to "reserved"
+      if (type === "booking" || type === "confirmed") {
+        type = "reserved";
+      } else if (type === "pending") {
+        type = "requested";
+      }
 
       return {
         id: doc.id,
