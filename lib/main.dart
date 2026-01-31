@@ -41,7 +41,7 @@ void main() async {
   // } catch (e) {
   //   Log.warn('App Check initialization skipped: $e');
   // }
-  Log.info('App Check disabled - enable after registering debug tokens in Firebase Console');
+  Log.i('App Check disabled - enable after registering debug tokens in Firebase Console');
 
   // ==================== AFRICA NETWORK OPTIMIZATIONS ====================
 
