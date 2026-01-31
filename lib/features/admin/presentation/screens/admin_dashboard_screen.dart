@@ -787,6 +787,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     final actions = [
       {'icon': Icons.person_add, 'label': 'Add User', 'color': Colors.blue, 'onTap': () => _showAddUserDialog()},
       {'icon': Icons.send, 'label': 'Send Notification', 'color': Colors.orange, 'onTap': () => _showSendNotificationDialog()},
+      {'icon': Icons.star, 'label': 'Destaques & Verificação', 'color': Colors.amber, 'onTap': () => context.push(Routes.adminFeaturedVerification)},
       {'icon': Icons.category_outlined, 'label': 'Manage Categories', 'color': Colors.purple, 'onTap': () => setState(() => _selectedIndex = 9)},
       {'icon': Icons.analytics, 'label': 'View Reports', 'color': AppColors.peach, 'onTap': () => setState(() => _selectedIndex = 11)},
     ];

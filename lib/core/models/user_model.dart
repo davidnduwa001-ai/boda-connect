@@ -21,6 +21,9 @@ class UserModel {
   // Violations tracking (admin-managed)
   final int violationsCount;
   final DateTime? lastViolationAt;
+  // Verification status (admin-controlled badge)
+  final bool isVerified;
+  final DateTime? verifiedAt;
 
   const UserModel({
     required this.uid,
@@ -41,6 +44,8 @@ class UserModel {
     this.lastSeen,
     this.violationsCount = 0,
     this.lastViolationAt,
+    this.isVerified = false,
+    this.verifiedAt,
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -84,6 +89,8 @@ class UserModel {
       lastSeen: _parseTimestamp(data['lastSeen']),
       violationsCount: (data['violationsCount'] as num?)?.toInt() ?? 0,
       lastViolationAt: _parseTimestamp(data['lastViolationAt']),
+      isVerified: data['isVerified'] as bool? ?? false,
+      verifiedAt: _parseTimestamp(data['verifiedAt']),
     );
   }
 
@@ -106,6 +113,8 @@ class UserModel {
       'lastSeen': lastSeen != null ? Timestamp.fromDate(lastSeen!) : null,
       'violationsCount': violationsCount,
       'lastViolationAt': lastViolationAt != null ? Timestamp.fromDate(lastViolationAt!) : null,
+      'isVerified': isVerified,
+      'verifiedAt': verifiedAt != null ? Timestamp.fromDate(verifiedAt!) : null,
     };
   }
 
@@ -128,6 +137,8 @@ class UserModel {
     DateTime? lastSeen,
     int? violationsCount,
     DateTime? lastViolationAt,
+    bool? isVerified,
+    DateTime? verifiedAt,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -148,6 +159,8 @@ class UserModel {
       lastSeen: lastSeen ?? this.lastSeen,
       violationsCount: violationsCount ?? this.violationsCount,
       lastViolationAt: lastViolationAt ?? this.lastViolationAt,
+      isVerified: isVerified ?? this.isVerified,
+      verifiedAt: verifiedAt ?? this.verifiedAt,
     );
   }
 

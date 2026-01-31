@@ -58,6 +58,7 @@ import 'package:boda_connect/features/admin/presentation/screens/admin_login_scr
 import 'package:boda_connect/features/admin/presentation/screens/admin_onboarding_queue_screen.dart';
 import 'package:boda_connect/features/admin/presentation/screens/admin_reports_dashboard.dart';
 import 'package:boda_connect/features/admin/presentation/screens/admin_broadcast_screen.dart';
+import 'package:boda_connect/features/admin/presentation/screens/admin_featured_verification_screen.dart';
 import 'package:boda_connect/features/supplier/presentation/screens/supplier_verification_pending_screen.dart';
 import 'package:boda_connect/features/supplier/presentation/screens/supplier_profile_edit_screen.dart';
 import 'package:boda_connect/features/supplier/presentation/screens/supplier_profile_screen.dart';
@@ -633,6 +634,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: Routes.adminBroadcast,
       builder: (context, state) => const AdminBroadcastScreen(),
+    ),
+    GoRoute(
+      path: Routes.adminFeaturedVerification,
+      builder: (context, state) => const AdminFeaturedVerificationScreen(),
     ),
   ],
   errorBuilder: (context, state) => Scaffold(

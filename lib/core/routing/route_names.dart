@@ -105,4 +105,5 @@ class Routes {
   static const String adminReports = '/admin-reports';
   static const String adminSupportChats = '/admin-support-chats';
   static const String adminBroadcast = '/admin-broadcast';
+  static const String adminFeaturedVerification = '/admin-featured-verification';
 }

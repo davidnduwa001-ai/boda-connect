@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:boda_connect/core/constants/colors.dart';
 import 'package:boda_connect/core/constants/dimensions.dart';
 import 'package:boda_connect/core/constants/text_styles.dart';
@@ -59,6 +60,9 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   StreamSubscription<UserPresence>? _presenceSubscription;
   UserPresence _otherUserPresence = UserPresence(isOnline: false, lastSeen: null);
 
+  // Verification status (admin-controlled badge)
+  bool _isOtherUserVerified = false;
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +75,9 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
 
     // Subscribe to other user's presence status
     _subscribeToPresence();
+
+    // Fetch other user's verification status
+    _fetchVerificationStatus();
 
     // If we have a conversation ID, subscribe immediately
     // Otherwise, try to initialize the conversation
@@ -97,6 +104,42 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
         });
       }
     });
+  }
+
+  /// Fetch other user's verification status (admin-controlled badge)
+  Future<void> _fetchVerificationStatus() async {
+    if (widget.otherUserId == null || widget.otherUserId!.isEmpty) return;
+
+    try {
+      // First check if it's a supplier
+      final supplierDoc = await FirebaseFirestore.instance
+          .collection('suppliers')
+          .doc(widget.otherUserId)
+          .get();
+
+      if (supplierDoc.exists) {
+        final isVerified = supplierDoc.data()?['isVerified'] as bool? ?? false;
+        if (mounted) {
+          setState(() => _isOtherUserVerified = isVerified);
+        }
+        return;
+      }
+
+      // If not a supplier, check users collection
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.otherUserId)
+          .get();
+
+      if (userDoc.exists) {
+        final isVerified = userDoc.data()?['isVerified'] as bool? ?? false;
+        if (mounted) {
+          setState(() => _isOtherUserVerified = isVerified);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching verification status: $e');
+    }
   }
 
   /// Show snackbar safely (deferred if called during build)
@@ -1216,8 +1259,11 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.verified, size: 16, color: AppColors.info),
+                      // Only show verified badge if admin has verified the user
+                      if (_isOtherUserVerified) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.verified, size: 16, color: AppColors.info),
+                      ],
                     ],
                   ),
                   Row(
