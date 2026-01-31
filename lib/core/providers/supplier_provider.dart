@@ -955,8 +955,9 @@ final supplierResponseTimeProvider = FutureProvider.family<ResponseTimeStats, St
     );
   } catch (e) {
     debugPrint('Error calculating response time: $e');
+    // Return graceful fallback instead of showing error to user
     return const ResponseTimeStats(
-      displayText: 'Erro',
+      displayText: '-',
       category: 'Desconhecido',
     );
   }

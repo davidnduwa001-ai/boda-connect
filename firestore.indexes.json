@@ -381,6 +381,20 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "supplierId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "chats",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "participantIds",
           "arrayConfig": "CONTAINS"
         },
