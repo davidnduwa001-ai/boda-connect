@@ -251,6 +251,16 @@ export const stripeWebhook = functions
 
                 // Update booking status to paid
                 try {
+                  // Validate amount before using
+                  if (typeof event.amount !== "number" || !Number.isFinite(event.amount) || event.amount < 0) {
+                    logger.error("invalid_event_amount", {
+                      amount: event.amount,
+                      type: typeof event.amount,
+                      paymentId: payment.id,
+                    });
+                    throw new Error(`Invalid payment amount: ${event.amount}`);
+                  }
+
                   await db.collection("bookings").doc(payment.data.bookingId).update({
                     status: "paid",
                     paidAmount: admin.firestore.FieldValue.increment(event.amount),

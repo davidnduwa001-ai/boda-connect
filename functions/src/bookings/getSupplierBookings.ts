@@ -28,7 +28,7 @@ interface SupplierBooking {
   eventDate: string; // ISO string
   eventTime?: string;
   eventLocation?: string;
-  totalPrice: number;
+  totalAmount: number;
   paidAmount: number;
   remainingAmount: number;
   status: string;
@@ -151,8 +151,8 @@ function sanitizeBookingForSupplier(
 ): SupplierBooking {
   const data = doc.data()!;
   const status = data.status || "pending";
-  // Support both totalPrice and totalAmount for backwards compatibility
-  const totalPrice = data.totalPrice || data.totalAmount || 0;
+  // Support both totalPrice (new) and totalAmount (legacy) for backwards compatibility
+  const totalAmount = data.totalPrice || data.totalAmount || 0;
   const paidAmount = data.paidAmount || 0;
 
   return {
@@ -166,15 +166,15 @@ function sanitizeBookingForSupplier(
     eventDate: data.eventDate?.toDate?.()?.toISOString() || new Date().toISOString(),
     eventTime: data.eventTime,
     eventLocation: data.eventLocation,
-    totalPrice,
+    totalAmount,
     paidAmount,
-    remainingAmount: totalPrice - paidAmount,
+    remainingAmount: totalAmount - paidAmount,
     status,
     paymentStatus: data.paymentStatus || "unpaid",
     notes: data.notes,
     createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
     updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-    uiFlags: calculateUIFlags(status, paidAmount, totalPrice),
+    uiFlags: calculateUIFlags(status, paidAmount, totalAmount),
   };
 }
 

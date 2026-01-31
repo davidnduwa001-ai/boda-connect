@@ -85,7 +85,8 @@ async function validateBookingForPayment(
 
   // Check if already fully paid
   const paidAmount = booking.paidAmount || 0;
-  const totalAmount = booking.totalAmount || 0;
+  // Support both totalPrice (new) and totalAmount (legacy) for backwards compatibility
+  const totalAmount = booking.totalPrice || booking.totalAmount || 0;
   if (paidAmount >= totalAmount && totalAmount > 0) {
     return {valid: false, error: "Esta reserva já foi paga integralmente"};
   }

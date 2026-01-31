@@ -20,7 +20,7 @@ interface ClientBooking {
   eventTime?: string;
   eventLocation?: string;
   guestCount?: number;
-  totalPrice: number;
+  totalAmount: number;
   paidAmount: number;
   remainingAmount: number;
   currency: string;
@@ -127,9 +127,10 @@ function sanitizeBookingForClient(
     eventTime: data.eventTime,
     eventLocation: data.eventLocation,
     guestCount: data.guestCount,
-    totalPrice: data.totalPrice || 0,
+    // Support both totalPrice (new) and totalAmount (legacy) for backwards compatibility
+    totalAmount: data.totalPrice || data.totalAmount || 0,
     paidAmount: data.paidAmount || 0,
-    remainingAmount: (data.totalPrice || 0) - (data.paidAmount || 0),
+    remainingAmount: (data.totalPrice || data.totalAmount || 0) - (data.paidAmount || 0),
     currency: data.currency || "AOA",
     status: data.status || "pending",
     paymentStatus: data.paymentStatus || "unpaid",

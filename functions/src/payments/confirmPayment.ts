@@ -115,33 +115,54 @@ async function updateBookingPayment(
 
   // Notify supplier
   const bookingDoc = await bookingRef.get();
-  if (bookingDoc.exists) {
-    const booking = bookingDoc.data()!;
-    const supplierId = booking.supplierId;
-
-    if (supplierId) {
-      // Get supplier's userId
-      const supplierDoc = await db.collection("suppliers").doc(supplierId).get();
-      const supplierUserId = supplierDoc.data()?.userId;
-
-      if (supplierUserId) {
-        const formatted = new Intl.NumberFormat("pt-AO", {
-          style: "currency",
-          currency: "AOA",
-        }).format(amount);
-
-        await db.collection("notifications").add({
-          userId: supplierUserId,
-          type: "payment_received",
-          title: "Pagamento Recebido! 💰",
-          body: `Você recebeu um pagamento de ${formatted}`,
-          data: {bookingId, paymentId, amount: amount.toString()},
-          isRead: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-    }
+  if (!bookingDoc.exists) {
+    console.warn(`Booking ${bookingId} not found for payment notification`);
+    return;
   }
+
+  const booking = bookingDoc.data()!;
+  const supplierId = booking.supplierId;
+
+  if (!supplierId) {
+    console.warn(`Booking ${bookingId} missing supplierId`);
+    return;
+  }
+
+  // Get supplier's userId
+  const supplierDoc = await db.collection("suppliers").doc(supplierId).get();
+  if (!supplierDoc.exists) {
+    console.warn(`Supplier ${supplierId} not found for payment notification`);
+    return;
+  }
+
+  const supplierUserId = supplierDoc.data()?.userId;
+  if (!supplierUserId) {
+    console.warn(`Supplier ${supplierId} missing userId`);
+    return;
+  }
+
+  // Validate amount before formatting
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
+    console.warn(`Invalid payment amount: ${amount}`);
+    return;
+  }
+
+  const formatted = new Intl.NumberFormat("pt-AO", {
+    style: "currency",
+    currency: "AOA",
+  }).format(amount);
+
+  await db.collection("notifications").add({
+    userId: supplierUserId,
+    type: "payment_received",
+    title: "Pagamento Recebido! 💰",
+    body: `Você recebeu um pagamento de ${formatted}`,
+    data: {bookingId, paymentId, amount: amount.toString()},
+    isRead: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  console.log(`Payment notification sent to supplier ${supplierId}`);
 }
 
 /**
