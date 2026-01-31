@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
 /// Maps Cloud Function errors to user-friendly messages
@@ -28,11 +29,25 @@ class ErrorMapper {
       return mapFunctionsError(error);
     }
 
+    // Check for Firebase App Check errors
+    if (_isAppCheckError(error)) {
+      return 'Erro de verificacao de seguranca. Reinicie o aplicativo.';
+    }
+
     // Log the actual error for debugging
     debugPrint('Unmapped error: $error');
 
     // Return generic user-friendly message
     return 'Ocorreu um erro. Tente novamente.';
+  }
+
+  /// Check if error is related to Firebase App Check
+  static bool _isAppCheckError(Object error) {
+    final errorString = error.toString().toLowerCase();
+    return errorString.contains('app check') ||
+        errorString.contains('appcheck') ||
+        errorString.contains('too many attempts') ||
+        (error is FirebaseException && errorString.contains('appcheck'));
   }
 
   /// Check if message looks like an internal error (shouldn't show to user)
@@ -107,6 +122,9 @@ class ErrorMapper {
     // Add context-specific hints
     switch (operation) {
       case 'payment':
+        if (_isAppCheckError(error)) {
+          return 'Erro de verificacao de seguranca. Reinicie o aplicativo e tente novamente.';
+        }
         if (_isRateLimitError(error)) {
           return 'Muitas tentativas de pagamento. Aguarde antes de tentar novamente.';
         }

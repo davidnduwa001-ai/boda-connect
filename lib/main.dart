@@ -25,16 +25,25 @@ void main() async {
 
   // ==================== APP CHECK ====================
   // Initialize App Check for security
-  // Use debug provider in debug mode, Play Integrity in release
+  // IMPORTANT: Use debug provider in development to avoid "Too many attempts" errors
+  // Play Integrity requires proper release signing and may fail with debug-signed builds
   try {
+    // For now, use debug provider to avoid rate limiting issues
+    // TODO: Switch to playIntegrity when proper release signing is configured
+    // and App Check debug tokens are registered in Firebase Console
     await FirebaseAppCheck.instance.activate(
-      androidProvider: kDebugMode
-          ? AndroidProvider.debug
-          : AndroidProvider.playIntegrity,
-      appleProvider: AppleProvider.appAttest,
+      // Use debug provider to avoid "Too many attempts" errors during development
+      // This prevents the Firebase SDK from repeatedly trying to get Play Integrity tokens
+      // which fails with debug-signed builds and causes rate limiting
+      androidProvider: AndroidProvider.debug,
+      appleProvider: kDebugMode
+          ? AppleProvider.debug
+          : AppleProvider.appAttest,
     );
+    Log.success('App Check initialized with debug provider');
   } catch (e) {
     // App Check may not be available on all platforms or during hot restart
+    // This is non-fatal - the app will continue to work, but without App Check protection
     Log.warn('App Check initialization skipped: $e');
   }
 
