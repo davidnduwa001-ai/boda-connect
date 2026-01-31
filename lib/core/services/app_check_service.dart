@@ -70,9 +70,9 @@ class AppCheckService {
     }
 
     try {
-      final token = await FirebaseAppCheck.instance.getToken(forceRefresh);
-      if (token != null) {
-        _cachedToken = token.token;
+      final tokenResult = await FirebaseAppCheck.instance.getToken(forceRefresh);
+      if (tokenResult != null) {
+        _cachedToken = tokenResult;
         _tokenExpiresAt = DateTime.now().add(_tokenCacheDuration);
         _resetFailures();
         return _cachedToken;
