@@ -13,6 +13,7 @@
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import {refundEscrow as refundEscrowService} from "./escrowService";
+import {isAdminUser} from "../common/adminAuth";
 
 const db = admin.firestore();
 const REGION = "us-central1";
@@ -28,15 +29,6 @@ interface RefundEscrowResponse {
   refundAmount?: number;
   error?: string;
   errorCode?: string;
-}
-
-/**
- * Check if caller is admin
- */
-async function checkIsAdmin(userId: string): Promise<boolean> {
-  const userDoc = await db.collection("users").doc(userId).get();
-  if (!userDoc.exists) return false;
-  return userDoc.data()?.role === "admin";
 }
 
 /**
@@ -85,7 +77,7 @@ export const refundEscrowFunction = functions
         const currentStatus = escrowData.status as string;
 
         // 4. Check if caller is admin (only admins can manually refund)
-        const isAdmin = await checkIsAdmin(callerId);
+        const isAdmin = await isAdminUser(callerId);
 
         if (!isAdmin) {
           throw new functions.https.HttpsError(

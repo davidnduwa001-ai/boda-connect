@@ -13,6 +13,7 @@
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import {releaseEscrow as releaseEscrowService} from "./escrowService";
+import {isAdminUser} from "../common/adminAuth";
 
 const db = admin.firestore();
 const REGION = "us-central1";
@@ -29,15 +30,6 @@ interface ReleaseEscrowResponse {
   platformFee?: number;
   error?: string;
   errorCode?: string;
-}
-
-/**
- * Check if caller is admin
- */
-async function checkIsAdmin(userId: string): Promise<boolean> {
-  const userDoc = await db.collection("users").doc(userId).get();
-  if (!userDoc.exists) return false;
-  return userDoc.data()?.role === "admin";
 }
 
 /**
@@ -96,7 +88,7 @@ export const releaseEscrowFunction = functions
         const currentStatus = escrowData.status as string;
 
         // 4. Check if caller is authorized
-        const isAdmin = await checkIsAdmin(callerId);
+        const isAdmin = await isAdminUser(callerId);
         const isClient = await checkIsClient(escrowData, callerId);
 
         // Only admin or the client (confirming service) can release

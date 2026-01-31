@@ -5,6 +5,7 @@ import {
   getEscrowByBookingId,
   markServiceCompleted,
 } from "../finance/escrowService";
+import {isAdminUser, isSupplierUser} from "../common/adminAuth";
 
 const db = admin.firestore();
 const REGION = "us-central1";
@@ -31,7 +32,10 @@ interface UpdateBookingStatusResponse {
  * 2. Validates the booking exists
  * 3. Validates the caller is a participant (client, supplier) or admin
  * 4. Validates the status transition using the state machine
- * 5. Updates the booking status with audit trail
+ * 5. Updates the booking status atomically with transaction
+ *
+ * CONCURRENCY: Uses Firestore transaction to prevent race conditions
+ * where concurrent calls could cause invalid state transitions.
  */
 export const updateBookingStatus = functions
     .region(REGION)
@@ -55,105 +59,130 @@ export const updateBookingStatus = functions
       }
 
       try {
-        // 3. Get the booking
         const bookingRef = db.collection("bookings").doc(data.bookingId);
-        const bookingDoc = await bookingRef.get();
 
-        if (!bookingDoc.exists) {
-          throw new functions.https.HttpsError(
-              "not-found",
-              "Reserva não encontrada"
-          );
-        }
+        // Pre-fetch authorization data (outside transaction for efficiency)
+        // These don't change during the transaction
+        const isAdmin = await isAdminUser(callerId);
 
-        const booking = bookingDoc.data()!;
-        const currentStatus = booking.status as string;
+        // Use transaction for atomic read-check-write
+        const result = await db.runTransaction(async (transaction) => {
+          // 3. Get the booking (inside transaction for consistency)
+          const bookingDoc = await transaction.get(bookingRef);
 
-        // 4. Check if caller is authorized
-        const isClient = booking.clientId === callerId;
-        const isSupplierUser = await checkIsSupplierUser(
-            booking.supplierId,
-            callerId
-        );
-        const isAdmin = await checkIsAdmin(callerId);
+          if (!bookingDoc.exists) {
+            throw new functions.https.HttpsError(
+                "not-found",
+                "Reserva não encontrada"
+            );
+          }
 
-        if (!isClient && !isSupplierUser && !isAdmin) {
-          throw new functions.https.HttpsError(
-              "permission-denied",
-              "Você não tem permissão para atualizar esta reserva"
-          );
-        }
+          const booking = bookingDoc.data()!;
+          const currentStatus = booking.status as string;
 
-        // 5. Additional authorization based on transition type
-        // Only suppliers/admins can confirm bookings
-        if (data.newStatus === "confirmed" && !isSupplierUser && !isAdmin) {
-          throw new functions.https.HttpsError(
-              "permission-denied",
-              "Apenas o fornecedor pode confirmar a reserva"
-          );
-        }
+          // 4. Check if caller is authorized
+          const isClient = booking.clientId === callerId;
+          const isSupplier = await isSupplierUser(booking.supplierId, callerId);
 
-        // Only suppliers/admins can mark bookings as completed
-        if (data.newStatus === "completed" && !isSupplierUser && !isAdmin) {
-          throw new functions.https.HttpsError(
-              "permission-denied",
-              "Apenas o fornecedor pode marcar a reserva como concluída"
-          );
-        }
+          if (!isClient && !isSupplier && !isAdmin) {
+            throw new functions.https.HttpsError(
+                "permission-denied",
+                "Você não tem permissão para atualizar esta reserva"
+            );
+          }
 
-        // 6. Validate the status transition using state machine
-        const validation = validateTransition(currentStatus, data.newStatus);
+          // 5. Additional authorization based on transition type
+          // Only suppliers/admins can confirm bookings
+          if (data.newStatus === "confirmed" && !isSupplier && !isAdmin) {
+            throw new functions.https.HttpsError(
+                "permission-denied",
+                "Apenas o fornecedor pode confirmar a reserva"
+            );
+          }
 
-        if (!validation.allowed) {
-          throw new functions.https.HttpsError(
-              "failed-precondition",
-              validation.error || "Transição de estado inválida"
-          );
-        }
+          // Only suppliers/admins can mark bookings as completed
+          if (data.newStatus === "completed" && !isSupplier && !isAdmin) {
+            throw new functions.https.HttpsError(
+                "permission-denied",
+                "Apenas o fornecedor pode marcar a reserva como concluída"
+            );
+          }
 
-        // If same status, return success without update (idempotent)
-        if (currentStatus === data.newStatus) {
+          // 6. Validate the status transition using state machine
+          const validation = validateTransition(currentStatus, data.newStatus);
+
+          if (!validation.allowed) {
+            throw new functions.https.HttpsError(
+                "failed-precondition",
+                validation.error || "Transição de estado inválida"
+            );
+          }
+
+          // If same status, return success without update (idempotent)
+          if (currentStatus === data.newStatus) {
+            console.log(
+                `Idempotent status update for booking ${data.bookingId}: already ${currentStatus}`
+            );
+            return {
+              idempotent: true,
+              previousStatus: currentStatus,
+              newStatus: data.newStatus,
+              booking,
+            };
+          }
+
+          // 7. Build the update
+          const now = admin.firestore.FieldValue.serverTimestamp();
+          const updates: Record<string, unknown> = {
+            status: data.newStatus,
+            updatedAt: now,
+            updatedBy: callerId,
+          };
+
+          // Add status-specific timestamps
+          switch (data.newStatus) {
+            case "confirmed":
+              updates.confirmedAt = now;
+              updates.confirmedBy = callerId;
+              break;
+            case "completed":
+              updates.completedAt = now;
+              updates.completedBy = callerId;
+              break;
+            case "cancelled":
+              updates.cancelledAt = now;
+              updates.cancelledBy = callerId;
+              break;
+          }
+
+          // 8. Update the booking atomically
+          transaction.update(bookingRef, updates);
+
           console.log(
-              `Idempotent status update for booking ${data.bookingId}: already ${currentStatus}`
+              `Booking ${data.bookingId} status updated: ${currentStatus} → ${data.newStatus} by ${callerId}`
           );
+
+          return {
+            idempotent: false,
+            previousStatus: currentStatus,
+            newStatus: data.newStatus,
+            booking,
+            isAdmin,
+          };
+        });
+
+        // Handle idempotent case
+        if (result.idempotent) {
           return {
             success: true,
             bookingId: data.bookingId,
-            previousStatus: currentStatus,
-            newStatus: data.newStatus,
+            previousStatus: result.previousStatus,
+            newStatus: result.newStatus,
           } as UpdateBookingStatusResponse;
         }
 
-        // 7. Build the update
-        const now = admin.firestore.FieldValue.serverTimestamp();
-        const updates: Record<string, unknown> = {
-          status: data.newStatus,
-          updatedAt: now,
-          updatedBy: callerId,
-        };
-
-        // Add status-specific timestamps
-        switch (data.newStatus) {
-          case "confirmed":
-            updates.confirmedAt = now;
-            updates.confirmedBy = callerId;
-            break;
-          case "completed":
-            updates.completedAt = now;
-            updates.completedBy = callerId;
-            break;
-          case "cancelled":
-            updates.cancelledAt = now;
-            updates.cancelledBy = callerId;
-            break;
-        }
-
-        // 8. Update the booking
-        await bookingRef.update(updates);
-
-        console.log(
-            `Booking ${data.bookingId} status updated: ${currentStatus} → ${data.newStatus} by ${callerId}`
-        );
+        // Post-transaction side effects (outside transaction)
+        const booking = result.booking;
 
         // 9. Block date in supplier's calendar when confirmed
         if (data.newStatus === "confirmed") {
@@ -198,20 +227,21 @@ export const updateBookingStatus = functions
         }
 
         // 11. Create audit log entry
+        const now = admin.firestore.FieldValue.serverTimestamp();
         await db.collection("audit_logs").add({
           category: "booking",
           eventType: "statusChanged",
           userId: callerId,
           resourceId: data.bookingId,
           resourceType: "booking",
-          previousValue: currentStatus,
-          newValue: data.newStatus,
-          description: `Booking status changed from ${currentStatus} to ${data.newStatus}`,
+          previousValue: result.previousStatus,
+          newValue: result.newStatus,
+          description: `Booking status changed from ${result.previousStatus} to ${result.newStatus}`,
           metadata: {
             bookingId: data.bookingId,
             clientId: booking.clientId,
             supplierId: booking.supplierId,
-            isAdmin,
+            isAdmin: result.isAdmin,
           },
           timestamp: now,
         });
@@ -219,8 +249,8 @@ export const updateBookingStatus = functions
         return {
           success: true,
           bookingId: data.bookingId,
-          previousStatus: currentStatus,
-          newStatus: data.newStatus,
+          previousStatus: result.previousStatus,
+          newStatus: result.newStatus,
         } as UpdateBookingStatusResponse;
       } catch (error) {
         console.error("Error updating booking status:", error);
@@ -235,37 +265,6 @@ export const updateBookingStatus = functions
         );
       }
     });
-
-/**
- * Check if a user is the supplier (or owns the supplier profile)
- */
-async function checkIsSupplierUser(
-    supplierId: string,
-    userId: string
-): Promise<boolean> {
-  const supplierDoc = await db.collection("suppliers").doc(supplierId).get();
-
-  if (!supplierDoc.exists) {
-    return false;
-  }
-
-  const supplier = supplierDoc.data()!;
-  return supplier.userId === userId;
-}
-
-/**
- * Check if a user is an admin
- */
-async function checkIsAdmin(userId: string): Promise<boolean> {
-  const userDoc = await db.collection("users").doc(userId).get();
-
-  if (!userDoc.exists) {
-    return false;
-  }
-
-  const user = userDoc.data()!;
-  return user.role === "admin";
-}
 
 /**
  * Block a date in supplier's calendar when booking is confirmed

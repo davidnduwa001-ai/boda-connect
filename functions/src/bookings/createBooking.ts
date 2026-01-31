@@ -438,27 +438,9 @@ export const createBooking = functions
 
               const packageData = packageDoc.data()!;
 
-              // 9. Atomic conflict check (existing bookings on same date)
-              const hasConflict = await hasBookingConflict(
-                  data.supplierId,
-                  data.eventDate
-              );
-
-              if (hasConflict) {
-                throw Errors.alreadyExists(
-                    errorContext,
-                    "Reserva",
-                    "Já existe uma reserva para esta data"
-                );
-              }
-
-              // 10. Get client info
+              // 9. Get client info (outside transaction - won't change)
               const clientDoc = await db.collection("users").doc(clientId).get();
               const clientData = clientDoc.exists ? clientDoc.data() : {};
-
-              // 11. Create the booking
-              const bookingRef = db.collection("bookings").doc();
-              const now = admin.firestore.FieldValue.serverTimestamp();
 
               // Convert eventDate string to Firestore Timestamp
               const eventDateParts = data.eventDate.split("-");
@@ -470,42 +452,84 @@ export const createBooking = functions
               );
               const eventDateTimestamp = admin.firestore.Timestamp.fromDate(eventDateObj);
 
-              const bookingData = {
-                id: bookingRef.id,
-                clientId: clientId,
-                clientName: clientData?.displayName || clientData?.name || "Cliente",
-                clientPhone: clientData?.phone || "",
-                clientEmail: clientData?.email || "",
-                supplierId: data.supplierId,
-                supplierName: supplier.businessName || supplier.name || "Fornecedor",
-                supplierPhone: supplier.phone || "",
-                packageId: data.packageId,
-                packageName: packageData.name || "Pacote",
-                packagePrice: packageData.price || 0,
-                eventDate: eventDateTimestamp,
-                eventTime: data.startTime || null,
-                startTime: data.startTime || null,
-                endTime: data.endTime || null,
-                eventName: data.eventName || null,
-                eventLocation: data.eventLocation || null,
-                guestCount: data.guestCount || null,
-                notes: data.notes || null,
-                status: "pending",
-                totalAmount: packageData.price || 0,
-                paidAmount: 0,
-                platformFee: 0,
-                supplierEarnings: 0,
-                createdAt: now,
-                updatedAt: now,
-                createdBy: "cloud_function",
-                clientRequestId: data.clientRequestId || null,
-              };
+              // Compute date range for conflict check
+              const startOfDay = new Date(
+                  parseInt(eventDateParts[0]),
+                  parseInt(eventDateParts[1]) - 1,
+                  parseInt(eventDateParts[2]),
+                  0, 0, 0
+              );
+              const endOfDay = new Date(
+                  parseInt(eventDateParts[0]),
+                  parseInt(eventDateParts[1]) - 1,
+                  parseInt(eventDateParts[2]),
+                  23, 59, 59, 999
+              );
 
-              await bookingRef.set(bookingData);
+              // 10. ATOMIC: Conflict check + Booking creation in transaction
+              // This prevents race conditions where two concurrent requests
+              // could both pass conflict check and create duplicate bookings
+              const bookingRef = db.collection("bookings").doc();
+
+              await db.runTransaction(async (transaction) => {
+                // Re-check for conflicts inside transaction
+                const conflictQuery = db
+                    .collection("bookings")
+                    .where("supplierId", "==", data.supplierId)
+                    .where("eventDate", ">=", admin.firestore.Timestamp.fromDate(startOfDay))
+                    .where("eventDate", "<=", admin.firestore.Timestamp.fromDate(endOfDay))
+                    .where("status", "in", ["pending", "confirmed"]);
+
+                const conflictSnapshot = await transaction.get(conflictQuery);
+
+                if (!conflictSnapshot.empty) {
+                  throw Errors.alreadyExists(
+                      errorContext,
+                      "Reserva",
+                      "Já existe uma reserva para esta data"
+                  );
+                }
+
+                // Build booking data
+                const now = admin.firestore.FieldValue.serverTimestamp();
+                const bookingData = {
+                  id: bookingRef.id,
+                  clientId: clientId,
+                  clientName: clientData?.displayName || clientData?.name || "Cliente",
+                  clientPhone: clientData?.phone || "",
+                  clientEmail: clientData?.email || "",
+                  supplierId: data.supplierId,
+                  supplierName: supplier.businessName || supplier.name || "Fornecedor",
+                  supplierPhone: supplier.phone || "",
+                  packageId: data.packageId,
+                  packageName: packageData.name || "Pacote",
+                  packagePrice: packageData.price || 0,
+                  eventDate: eventDateTimestamp,
+                  eventTime: data.startTime || null,
+                  startTime: data.startTime || null,
+                  endTime: data.endTime || null,
+                  eventName: data.eventName || null,
+                  eventLocation: data.eventLocation || null,
+                  guestCount: data.guestCount || null,
+                  notes: data.notes || null,
+                  status: "pending",
+                  totalAmount: packageData.price || 0,
+                  paidAmount: 0,
+                  platformFee: 0,
+                  supplierEarnings: 0,
+                  createdAt: now,
+                  updatedAt: now,
+                  createdBy: "cloud_function",
+                  clientRequestId: data.clientRequestId || null,
+                };
+
+                // Create the booking atomically
+                transaction.set(bookingRef, bookingData);
+              });
 
               logger.stateTransition("booking", bookingRef.id, "none", "pending", clientId);
 
-              // 12. Create notification for supplier
+              // 11. Create notification for supplier
               const notificationRef = db.collection("notifications").doc();
               await notificationRef.set({
                 id: notificationRef.id,

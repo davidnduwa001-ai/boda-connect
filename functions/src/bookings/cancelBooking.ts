@@ -5,6 +5,7 @@ import {
   getEscrowByBookingId,
   refundEscrow,
 } from "../finance/escrowService";
+import {isAdminUser, isSupplier} from "../common/adminAuth";
 
 const db = admin.firestore();
 const REGION = "us-central1";
@@ -73,13 +74,13 @@ export const cancelBooking = functions
 
         // 4. Check if caller is authorized
         const isClient = booking.clientId === callerId;
-        const isSupplierUser = await checkIsSupplierUser(
+        const isSupplier = await isSupplier(
             booking.supplierId,
             callerId
         );
-        const isAdmin = await checkIsAdmin(callerId);
+        const isAdmin = await isAdminUser(callerId);
 
-        if (!isClient && !isSupplierUser && !isAdmin) {
+        if (!isClient && !isSupplier && !isAdmin) {
           throw new functions.https.HttpsError(
               "permission-denied",
               "Você não tem permissão para cancelar esta reserva"
@@ -132,7 +133,7 @@ export const cancelBooking = functions
         // Determine canceller role for tracking
         if (isClient) {
           updates.cancelledByRole = "client";
-        } else if (isSupplierUser) {
+        } else if (isSupplier) {
           updates.cancelledByRole = "supplier";
         } else if (isAdmin) {
           updates.cancelledByRole = "admin";
@@ -152,7 +153,7 @@ export const cancelBooking = functions
           const refundableStatuses = ["funded", "service_completed", "disputed"];
           if (refundableStatuses.includes(escrow.status)) {
             try {
-              const cancelledByRole = isClient ? "client" : isSupplierUser ? "supplier" : "admin";
+              const cancelledByRole = isClient ? "client" : isSupplier ? "supplier" : "admin";
               const refundReason = data.reason ||
                 `Booking cancelled by ${cancelledByRole}`;
 
@@ -185,13 +186,13 @@ export const cancelBooking = functions
           resourceType: "booking",
           previousValue: currentStatus,
           newValue: "cancelled",
-          description: `Booking cancelled by ${isClient ? "client" : isSupplierUser ? "supplier" : "admin"}`,
+          description: `Booking cancelled by ${isClient ? "client" : isSupplier ? "supplier" : "admin"}`,
           metadata: {
             bookingId: data.bookingId,
             clientId: booking.clientId,
             supplierId: booking.supplierId,
             reason: data.reason || null,
-            cancelledByRole: isClient ? "client" : isSupplierUser ? "supplier" : "admin",
+            cancelledByRole: isClient ? "client" : isSupplier ? "supplier" : "admin",
             isAdmin,
           },
           timestamp: now,
@@ -239,37 +240,6 @@ export const cancelBooking = functions
         );
       }
     });
-
-/**
- * Check if a user is the supplier (or owns the supplier profile)
- */
-async function checkIsSupplierUser(
-    supplierId: string,
-    userId: string
-): Promise<boolean> {
-  const supplierDoc = await db.collection("suppliers").doc(supplierId).get();
-
-  if (!supplierDoc.exists) {
-    return false;
-  }
-
-  const supplier = supplierDoc.data()!;
-  return supplier.userId === userId;
-}
-
-/**
- * Check if a user is an admin
- */
-async function checkIsAdmin(userId: string): Promise<boolean> {
-  const userDoc = await db.collection("users").doc(userId).get();
-
-  if (!userDoc.exists) {
-    return false;
-  }
-
-  const user = userDoc.data()!;
-  return user.role === "admin";
-}
 
 /**
  * Get the user ID associated with a supplier
