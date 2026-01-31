@@ -545,7 +545,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           'totalAmount': widget.totalPrice,
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ BOOKING ERROR: $e');
+      debugPrint('❌ STACK TRACE: $stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

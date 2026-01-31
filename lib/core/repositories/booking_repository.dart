@@ -63,15 +63,24 @@ class BookingRepository {
         'selectedCustomizations': booking.selectedCustomizations,
       });
       Log.i('BookingRepository: Cloud Function returned');
+      Log.i('BookingRepository: Response data: ${result.data}');
 
       final data = result.data;
+      if (data == null) {
+        throw Exception('Cloud Function returned null data');
+      }
+
       if (data['success'] != true) {
+        Log.fail('BookingRepository: Cloud Function failed: ${data['error']}');
         throw Exception(data['error'] ?? 'Falha ao criar reserva');
       }
 
-      final bookingId = data['bookingId'] as String;
-      Log.success('Booking created via Cloud Function: $bookingId');
+      final bookingId = data['bookingId'] as String?;
+      if (bookingId == null || bookingId.isEmpty) {
+        throw Exception('Cloud Function did not return bookingId');
+      }
 
+      Log.success('Booking created via Cloud Function: $bookingId');
       return bookingId;
     } on FirebaseFunctionsException catch (e) {
       Log.fail('Cloud Function error: ${e.code} - ${e.message}');
