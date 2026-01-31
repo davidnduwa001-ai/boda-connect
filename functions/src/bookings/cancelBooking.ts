@@ -5,7 +5,7 @@ import {
   getEscrowByBookingId,
   refundEscrow,
 } from "../finance/escrowService";
-import {isAdminUser, isSupplier} from "../common/adminAuth";
+import {isAdminUser, isSupplierUser} from "../common/adminAuth";
 
 const db = admin.firestore();
 const REGION = "us-central1";
@@ -31,10 +31,10 @@ interface CancelBookingResponse {
  * 2. Validates the booking exists
  * 3. Validates the caller is a participant (client, supplier) or admin
  * 4. Validates the booking can be cancelled (using state machine)
- * 5. Updates the booking status to cancelled with audit trail
+ * 5. Updates the booking status to cancelled atomically with transaction
  *
- * NOTE: This function does NOT handle refunds. Refund logic will be
- * implemented in Phase 2.3B (Escrow/Refund Authority).
+ * CONCURRENCY: Uses Firestore transaction to prevent race conditions
+ * where concurrent cancellation attempts could cause inconsistent state.
  */
 export const cancelBooking = functions
     .region(REGION)
@@ -58,102 +58,131 @@ export const cancelBooking = functions
       }
 
       try {
-        // 3. Get the booking
         const bookingRef = db.collection("bookings").doc(data.bookingId);
-        const bookingDoc = await bookingRef.get();
 
-        if (!bookingDoc.exists) {
-          throw new functions.https.HttpsError(
-              "not-found",
-              "Reserva não encontrada"
-          );
-        }
-
-        const booking = bookingDoc.data()!;
-        const currentStatus = booking.status as string;
-
-        // 4. Check if caller is authorized
-        const isClient = booking.clientId === callerId;
-        const isSupplier = await isSupplier(
-            booking.supplierId,
-            callerId
-        );
+        // Pre-fetch admin status (outside transaction - won't change during request)
         const isAdmin = await isAdminUser(callerId);
 
-        if (!isClient && !isSupplier && !isAdmin) {
-          throw new functions.https.HttpsError(
-              "permission-denied",
-              "Você não tem permissão para cancelar esta reserva"
-          );
-        }
+        // Use transaction for atomic read-check-write
+        const result = await db.runTransaction(async (transaction) => {
+          // 3. Get the booking inside transaction
+          const bookingDoc = await transaction.get(bookingRef);
 
-        // 5. Check if already cancelled (idempotent)
-        if (currentStatus === "cancelled") {
-          console.log(
-              `Idempotent cancellation for booking ${data.bookingId}: already cancelled`
+          if (!bookingDoc.exists) {
+            throw new functions.https.HttpsError(
+                "not-found",
+                "Reserva não encontrada"
+            );
+          }
+
+          const booking = bookingDoc.data()!;
+          const currentStatus = booking.status as string;
+
+          // 4. Check if caller is authorized
+          const isClient = booking.clientId === callerId;
+          const isSupplierOwner = await isSupplierUser(
+              booking.supplierId,
+              callerId
           );
+
+          if (!isClient && !isSupplierOwner && !isAdmin) {
+            throw new functions.https.HttpsError(
+                "permission-denied",
+                "Você não tem permissão para cancelar esta reserva"
+            );
+          }
+
+          // 5. Check if already cancelled (idempotent)
+          if (currentStatus === "cancelled") {
+            console.log(
+                `Idempotent cancellation for booking ${data.bookingId}: already cancelled`
+            );
+            return {
+              idempotent: true,
+              previousStatus: currentStatus,
+              booking,
+              cancelledByRole: "unknown",
+            };
+          }
+
+          // 6. Validate the booking can be cancelled using state machine
+          if (!canCancel(currentStatus)) {
+            const statusLabels: Record<string, string> = {
+              pending: "pendente",
+              confirmed: "confirmada",
+              completed: "concluída",
+              cancelled: "cancelada",
+            };
+            const label = statusLabels[currentStatus] || currentStatus;
+
+            throw new functions.https.HttpsError(
+                "failed-precondition",
+                `Não é possível cancelar uma reserva ${label}`
+            );
+          }
+
+          // 7. Build the update
+          const now = admin.firestore.FieldValue.serverTimestamp();
+          const updates: Record<string, unknown> = {
+            status: "cancelled",
+            cancelledAt: now,
+            cancelledBy: callerId,
+            updatedAt: now,
+            updatedBy: callerId,
+          };
+
+          // Add cancellation reason if provided
+          if (data.reason) {
+            updates.cancellationReason = data.reason;
+          }
+
+          // Determine canceller role for tracking
+          let cancelledByRole: string;
+          if (isClient) {
+            cancelledByRole = "client";
+          } else if (isSupplierOwner) {
+            cancelledByRole = "supplier";
+          } else {
+            cancelledByRole = "admin";
+          }
+          updates.cancelledByRole = cancelledByRole;
+
+          // 8. Update the booking atomically
+          transaction.update(bookingRef, updates);
+
+          console.log(
+              `Booking ${data.bookingId} cancelled: ${currentStatus} → cancelled by ${callerId}`
+          );
+
+          return {
+            idempotent: false,
+            previousStatus: currentStatus,
+            booking,
+            cancelledByRole,
+            isAdmin,
+          };
+        });
+
+        // Handle idempotent case
+        if (result.idempotent) {
           return {
             success: true,
             bookingId: data.bookingId,
-            previousStatus: currentStatus,
+            previousStatus: result.previousStatus,
           } as CancelBookingResponse;
         }
 
-        // 6. Validate the booking can be cancelled using state machine
-        if (!canCancel(currentStatus)) {
-          const statusLabels: Record<string, string> = {
-            pending: "pendente",
-            confirmed: "confirmada",
-            completed: "concluída",
-            cancelled: "cancelada",
-          };
-          const label = statusLabels[currentStatus] || currentStatus;
-
-          throw new functions.https.HttpsError(
-              "failed-precondition",
-              `Não é possível cancelar uma reserva ${label}`
-          );
-        }
-
-        // 7. Build the update
+        // Post-transaction side effects (outside transaction)
+        const booking = result.booking;
+        const cancelledByRole = result.cancelledByRole;
         const now = admin.firestore.FieldValue.serverTimestamp();
-        const updates: Record<string, unknown> = {
-          status: "cancelled",
-          cancelledAt: now,
-          cancelledBy: callerId,
-          updatedAt: now,
-          updatedBy: callerId,
-        };
-
-        // Add cancellation reason if provided
-        if (data.reason) {
-          updates.cancellationReason = data.reason;
-        }
-
-        // Determine canceller role for tracking
-        if (isClient) {
-          updates.cancelledByRole = "client";
-        } else if (isSupplier) {
-          updates.cancelledByRole = "supplier";
-        } else if (isAdmin) {
-          updates.cancelledByRole = "admin";
-        }
-
-        // 8. Update the booking
-        await bookingRef.update(updates);
-
-        console.log(
-            `Booking ${data.bookingId} cancelled: ${currentStatus} → cancelled by ${callerId}`
-        );
 
         // 9. Handle escrow refund if applicable
-        // When a booking is cancelled, any funded escrow should be refunded to the client
         const escrow = await getEscrowByBookingId(data.bookingId);
         if (escrow) {
           const refundableStatuses = ["funded", "service_completed", "disputed"];
           if (refundableStatuses.includes(escrow.status)) {
             try {
-              const cancelledByRole = isClient ? "client" : isSupplier ? "supplier" : "admin";
               const refundReason = data.reason ||
                 `Booking cancelled by ${cancelledByRole}`;
 
@@ -163,8 +192,6 @@ export const cancelBooking = functions
                   `Escrow ${escrow.id} refunded for cancelled booking ${data.bookingId}`
               );
             } catch (escrowError) {
-              // Log error but don't fail the cancellation
-              // Admin will need to manually process the refund
               console.error(
                   `Error refunding escrow for cancelled booking ${data.bookingId}:`,
                   escrowError
@@ -184,21 +211,22 @@ export const cancelBooking = functions
           userId: callerId,
           resourceId: data.bookingId,
           resourceType: "booking",
-          previousValue: currentStatus,
+          previousValue: result.previousStatus,
           newValue: "cancelled",
-          description: `Booking cancelled by ${isClient ? "client" : isSupplier ? "supplier" : "admin"}`,
+          description: `Booking cancelled by ${cancelledByRole}`,
           metadata: {
             bookingId: data.bookingId,
             clientId: booking.clientId,
             supplierId: booking.supplierId,
             reason: data.reason || null,
-            cancelledByRole: isClient ? "client" : isSupplier ? "supplier" : "admin",
-            isAdmin,
+            cancelledByRole,
+            isAdmin: result.isAdmin,
           },
           timestamp: now,
         });
 
         // 11. Create notification for the other party
+        const isClient = booking.clientId === callerId;
         const notifyUserId = isClient
           ? await getSupplierUserId(booking.supplierId)
           : booking.clientId;
@@ -225,7 +253,7 @@ export const cancelBooking = functions
         return {
           success: true,
           bookingId: data.bookingId,
-          previousStatus: currentStatus,
+          previousStatus: result.previousStatus,
         } as CancelBookingResponse;
       } catch (error) {
         console.error("Error cancelling booking:", error);

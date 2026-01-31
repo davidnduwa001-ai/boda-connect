@@ -503,7 +503,7 @@ export const respondToBooking = functions
       }
 
       try {
-        // 3. Get supplier ID from auth
+        // 3. Get supplier ID from auth (outside transaction - won't change during request)
         const supplierId = await getSupplierIdFromAuth(context.auth.uid);
 
         if (!supplierId) {
@@ -513,77 +513,113 @@ export const respondToBooking = functions
           );
         }
 
-        // 4. Get the booking
         const bookingRef = db.collection("bookings").doc(data.bookingId);
-        const bookingDoc = await bookingRef.get();
+        const newStatus = data.action === "confirm" ? "confirmed" : "rejected";
+        const callerId = context.auth!.uid;
 
-        if (!bookingDoc.exists) {
-          throw new functions.https.HttpsError(
-              "not-found",
-              "Reserva não encontrada"
-          );
-        }
+        // Use transaction for atomic read-check-write to prevent race conditions
+        const result = await db.runTransaction(async (transaction) => {
+          // 4. Get the booking inside transaction
+          const bookingDoc = await transaction.get(bookingRef);
 
-        const booking = bookingDoc.data()!;
-
-        // 5. Validate ownership
-        if (booking.supplierId !== supplierId) {
-          throw new functions.https.HttpsError(
-              "permission-denied",
-              "Esta reserva não pertence ao seu perfil"
-          );
-        }
-
-        // 6. Validate current status
-        if (booking.status !== "pending") {
-          throw new functions.https.HttpsError(
-              "failed-precondition",
-              `Não é possível responder: reserva está '${booking.status}'`
-          );
-        }
-
-        // 7. Payment gate enforcement for confirmation
-        if (data.action === "confirm") {
-          const paidAmount = booking.paidAmount || 0;
-          // totalPrice available for future percentage-based payment validation
-          const _totalPrice = booking.totalPrice || 0;
-          void _totalPrice; // Marked for future use
-
-          // Check if payment is required (configurable - at least signal/deposit)
-          // For now, we require at least some payment before confirmation
-          if (paidAmount <= 0) {
+          if (!bookingDoc.exists) {
             throw new functions.https.HttpsError(
-                "failed-precondition",
-                "Pagamento necessário: O cliente precisa pagar o sinal antes da confirmação"
+                "not-found",
+                "Reserva não encontrada"
             );
           }
+
+          const booking = bookingDoc.data()!;
+          const currentStatus = booking.status as string;
+
+          // 5. Validate ownership
+          if (booking.supplierId !== supplierId) {
+            throw new functions.https.HttpsError(
+                "permission-denied",
+                "Esta reserva não pertence ao seu perfil"
+            );
+          }
+
+          // 6. Check idempotency - if already in target status, return success
+          if (currentStatus === newStatus) {
+            console.log(
+                `Idempotent response for booking ${data.bookingId}: already ${currentStatus}`
+            );
+            return {
+              idempotent: true,
+              newStatus: currentStatus,
+              booking,
+            };
+          }
+
+          // 7. Validate current status allows this transition
+          if (currentStatus !== "pending") {
+            throw new functions.https.HttpsError(
+                "failed-precondition",
+                `Não é possível responder: reserva está '${currentStatus}'`
+            );
+          }
+
+          // 8. Payment gate enforcement for confirmation
+          if (data.action === "confirm") {
+            const paidAmount = booking.paidAmount || 0;
+
+            // Check if payment is required (at least signal/deposit)
+            if (paidAmount <= 0) {
+              throw new functions.https.HttpsError(
+                  "failed-precondition",
+                  "Pagamento necessário: O cliente precisa pagar o sinal antes da confirmação"
+              );
+            }
+          }
+
+          // 9. Build and apply update atomically
+          const now = admin.firestore.FieldValue.serverTimestamp();
+          const updates: Record<string, unknown> = {
+            status: newStatus,
+            updatedAt: now,
+            respondedAt: now,
+            respondedBy: callerId,
+          };
+
+          if (data.action === "confirm") {
+            updates.confirmedAt = now;
+          } else {
+            updates.rejectedAt = now;
+            updates.rejectionReason = data.reason || "Fornecedor rejeitou o pedido";
+          }
+
+          transaction.update(bookingRef, updates);
+
+          console.log(
+              `Booking ${data.bookingId} status updated: ${currentStatus} → ${newStatus} by supplier ${supplierId}`
+          );
+
+          return {
+            idempotent: false,
+            newStatus,
+            booking,
+          };
+        });
+
+        // Handle idempotent case - return success without side effects
+        if (result.idempotent) {
+          return {
+            success: true,
+            bookingId: data.bookingId,
+            newStatus: result.newStatus,
+          };
         }
 
-        // 8. Update booking status
+        // Post-transaction side effects (outside transaction)
+        const booking = result.booking;
         const now = admin.firestore.FieldValue.serverTimestamp();
-        const newStatus = data.action === "confirm" ? "confirmed" : "rejected";
 
-        const updates: Record<string, unknown> = {
-          status: newStatus,
-          updatedAt: now,
-          respondedAt: now,
-          respondedBy: context.auth.uid,
-        };
-
-        if (data.action === "confirm") {
-          updates.confirmedAt = now;
-        } else {
-          updates.rejectedAt = now;
-          updates.rejectionReason = data.reason || "Fornecedor rejeitou o pedido";
-        }
-
-        await bookingRef.update(updates);
-
-        // 9. Create audit log
+        // 10. Create audit log
         await db.collection("audit_logs").add({
           category: "booking",
           eventType: data.action === "confirm" ? "confirmed" : "rejected",
-          userId: context.auth.uid,
+          userId: callerId,
           resourceId: data.bookingId,
           resourceType: "booking",
           previousValue: "pending",

@@ -160,8 +160,9 @@ async function enforceRateLimitOrFail(params: {
 /**
  * Atomic conflict check - returns true if there's a conflict
  * Uses Timestamp range query to match how eventDate is stored
+ * Exported for potential use outside transactions
  */
-async function hasBookingConflict(
+export async function hasBookingConflict(
     supplierId: string,
     eventDate: string,
     excludeBookingId?: string
@@ -531,6 +532,7 @@ export const createBooking = functions
 
               // 11. Create notification for supplier
               const notificationRef = db.collection("notifications").doc();
+              const notificationNow = admin.firestore.FieldValue.serverTimestamp();
               await notificationRef.set({
                 id: notificationRef.id,
                 userId: supplier.userId,
@@ -543,7 +545,7 @@ export const createBooking = functions
                   eventDate: data.eventDate,
                 },
                 read: false,
-                createdAt: now,
+                createdAt: notificationNow,
               });
 
               logger.operationSuccess("create_booking", {
