@@ -145,20 +145,48 @@ interface NotificationData {
 
 /**
  * Send push notification to user
+ * Handles both regular users and suppliers (where document ID may differ from auth UID)
  * @param {NotificationData} notification - Notification data
  */
 async function sendPushNotification(
     notification: NotificationData
 ): Promise<void> {
   try {
+    let fcmToken: string | undefined;
+    let actualUserId = notification.userId;
+
+    // Try to get FCM token from users collection
     const userDoc = await db
         .collection("users")
         .doc(notification.userId)
         .get();
-    const fcmToken = userDoc.data()?.fcmToken;
+    fcmToken = userDoc.data()?.fcmToken;
+
+    // If no token found, check if this is a supplier document ID
+    // Suppliers may have document ID != auth UID
+    if (!fcmToken) {
+      const supplierDoc = await db
+          .collection("suppliers")
+          .doc(notification.userId)
+          .get();
+
+      if (supplierDoc.exists) {
+        const supplierAuthUid = supplierDoc.data()?.userId;
+        if (supplierAuthUid && supplierAuthUid !== notification.userId) {
+          // This is a supplier with different document ID, get token from actual user doc
+          const supplierUserDoc = await db
+              .collection("users")
+              .doc(supplierAuthUid)
+              .get();
+          fcmToken = supplierUserDoc.data()?.fcmToken;
+          actualUserId = supplierAuthUid;
+          console.log(`Resolved supplier ${notification.userId} -> auth UID ${actualUserId}`);
+        }
+      }
+    }
 
     if (!fcmToken) {
-      console.log(`No FCM token for user ${notification.userId}`);
+      console.log(`No FCM token for user ${notification.userId} (resolved: ${actualUserId})`);
       return;
     }
 
@@ -189,8 +217,10 @@ async function sendPushNotification(
       },
     });
 
+    // Store notification with the resolved user ID (auth UID)
+    // This ensures the notification is found when the client queries
     await db.collection("notifications").add({
-      userId: notification.userId,
+      userId: actualUserId,
       title: notification.title,
       body: notification.body,
       type: notification.type,
@@ -199,7 +229,7 @@ async function sendPushNotification(
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    console.log(`Notification sent to ${notification.userId}`);
+    console.log(`Notification sent to ${actualUserId}`);
   } catch (error) {
     console.error("Error sending notification:", error);
   }
