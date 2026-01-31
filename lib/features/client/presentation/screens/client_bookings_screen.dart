@@ -737,7 +737,11 @@ class _ClientBookingsScreenState extends ConsumerState<ClientBookingsScreen>
   Future<void> _handleCancelBooking(ClientBookingSummary booking) async {
     final result = await showDialog<Map<String, String>>(
       context: context,
-      builder: (context) => const CancelBookingDialog(),
+      builder: (context) => CancelBookingDialog(
+        eventDate: booking.eventDate,
+        totalAmount: booking.totalPrice.toDouble(),
+        isSupplier: false,
+      ),
     );
 
     if (result == null || !mounted) return;
