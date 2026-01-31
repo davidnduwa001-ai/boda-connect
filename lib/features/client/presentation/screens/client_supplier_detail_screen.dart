@@ -250,7 +250,7 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
     final responseTimeAsync = ref.watch(supplierResponseTimeProvider(supplier.id));
     final responseTimeDisplay = responseTimeAsync.when(
       loading: () => '...',
-      error: (_, __) => supplier.responseTime ?? '-',
+      error: (_, __) => _getValidResponseTime(supplier.responseTime),
       data: (stats) => stats.displayText,
     );
 
@@ -391,6 +391,25 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
     if (desc.isEmpty) return '';
     final truncated = desc.length > 200 ? '${desc.substring(0, 200)}...' : desc;
     return '📋 Sobre:\n$truncated\n';
+  }
+
+  /// Validate response time value, filter out error strings
+  String _getValidResponseTime(String? responseTime) {
+    if (responseTime == null || responseTime.isEmpty) {
+      return 'Sem dados';
+    }
+
+    // Filter out debugging/error values
+    final lower = responseTime.toLowerCase();
+    if (lower.contains('erro') ||
+        lower.contains('error') ||
+        lower.contains('null') ||
+        lower.contains('undefined') ||
+        lower.contains('nan')) {
+      return 'Sem dados';
+    }
+
+    return responseTime;
   }
 
   Widget _buildBadge(String text, IconData icon, Color color, Color bgColor) {
