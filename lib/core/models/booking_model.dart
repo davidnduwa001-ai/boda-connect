@@ -6,6 +6,7 @@ enum BookingStatus {
   inProgress,
   completed,
   cancelled,
+  rejected,
   disputed,
   refunded,
 }
