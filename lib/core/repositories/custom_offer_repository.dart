@@ -14,6 +14,24 @@ class CustomOfferRepository {
   CollectionReference<Map<String, dynamic>> get _offers =>
       _firestore.collection('custom_offers');
 
+  /// Collection references for conversations (new) and chats (legacy)
+  CollectionReference get _conversations => _firestore.collection('conversations');
+  CollectionReference get _chats => _firestore.collection('chats');
+
+  /// Get the correct collection reference for a chat/conversation ID
+  /// Returns the collection where the document exists (conversations first, then chats)
+  Future<({CollectionReference collection, DocumentSnapshot doc})> _getConversationDoc(String chatId) async {
+    // Try conversations collection first (newer format)
+    final convDoc = await _conversations.doc(chatId).get();
+    if (convDoc.exists) {
+      return (collection: _conversations, doc: convDoc);
+    }
+
+    // Fall back to chats collection (legacy format)
+    final chatDoc = await _chats.doc(chatId).get();
+    return (collection: _chats, doc: chatDoc);
+  }
+
   // ==================== CREATE OFFER ====================
 
   /// Create a new custom offer or price proposal
@@ -35,13 +53,13 @@ class CustomOfferRepository {
     DateTime? validUntil,
     String? initiatedBy, // 'seller' or 'buyer'
   }) async {
-    // Verify the chat exists
-    final chatDoc = await _firestoreService.chats.doc(chatId).get();
-    if (!chatDoc.exists) {
+    // Verify the chat/conversation exists (supports both collections)
+    final (:collection, :doc) = await _getConversationDoc(chatId);
+    if (!doc.exists) {
       throw Exception('Conversa não encontrada');
     }
 
-    final chatData = chatDoc.data() as Map<String, dynamic>?;
+    final chatData = doc.data() as Map<String, dynamic>?;
 
     // Determine who initiated the offer
     final actualInitiatedBy = initiatedBy ??
@@ -123,8 +141,8 @@ class CustomOfferRepository {
       createdAt: now,
     );
 
-    // Add message to chat
-    final messageRef = await _firestoreService.chats
+    // Add message to chat/conversation (uses correct collection)
+    final messageRef = await collection
         .doc(chatId)
         .collection('messages')
         .add({
@@ -145,7 +163,7 @@ class CustomOfferRepository {
         ? 'Proposta do cliente: ${_formatPrice(customPrice)} AOA'
         : 'Proposta: ${_formatPrice(customPrice)} AOA';
 
-    await _firestoreService.chats.doc(chatId).update({
+    await collection.doc(chatId).update({
       'lastMessage': lastMessageText,
       'lastMessageAt': Timestamp.fromDate(now),
       'lastMessageSenderId': senderId,
@@ -444,8 +462,12 @@ class CustomOfferRepository {
     required String text,
     required String senderId,
   }) async {
+    // Get correct collection (conversations or chats)
+    final (:collection, :doc) = await _getConversationDoc(chatId);
+    if (!doc.exists) return; // Chat not found, skip
+
     final now = DateTime.now();
-    await _firestoreService.chats
+    await collection
         .doc(chatId)
         .collection('messages')
         .add({
@@ -458,7 +480,7 @@ class CustomOfferRepository {
       'isDeleted': false,
     });
 
-    await _firestoreService.chats.doc(chatId).update({
+    await collection.doc(chatId).update({
       'lastMessage': text,
       'lastMessageAt': Timestamp.fromDate(now),
       'updatedAt': Timestamp.fromDate(now),
