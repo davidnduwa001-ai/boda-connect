@@ -543,6 +543,7 @@ class _SupplierRevenueScreenState extends ConsumerState<SupplierRevenueScreen> {
       final package = (booking.packageName ?? 'Pacote').replaceAll(',', ';');
       final status = booking.status == BookingStatus.completed ? 'Pago' :
                      booking.status == BookingStatus.confirmed ? 'Pendente' :
+                     booking.status == BookingStatus.rejected ? 'Recusado' :
                      'Cancelado';
       final paid = booking.paidAmount;
       final total = booking.totalPrice;
