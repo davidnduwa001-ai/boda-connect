@@ -207,6 +207,128 @@ class ReviewNotifier extends StateNotifier<AsyncValue<void>> {
       print('Error updating supplier rating: $e');
     }
   }
+
+  /// Submit a review from supplier to client
+  /// Used by suppliers to rate clients after service completion
+  Future<String?> submitClientReview({
+    required String bookingId,
+    required String supplierId,
+    required String clientId,
+    String? supplierName,
+    required double rating,
+    required String comment,
+    List<String>? tags,
+  }) async {
+    state = const AsyncValue.loading();
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+
+      // VALIDATE: Booking must exist and be completed before allowing review
+      final bookingDoc = await firestore.collection('bookings').doc(bookingId).get();
+      if (!bookingDoc.exists) {
+        throw Exception('Reserva não encontrada');
+      }
+
+      final bookingData = bookingDoc.data()!;
+      final bookingStatus = bookingData['status'] as String?;
+
+      // Only allow reviews for completed bookings
+      if (bookingStatus != 'completed') {
+        throw Exception('Só pode avaliar após o serviço ser concluído');
+      }
+
+      // Check if supplier already reviewed this booking
+      if (bookingData['hasSupplierReview'] == true) {
+        throw Exception('Já avaliou este cliente para esta reserva');
+      }
+
+      // Validate that the supplier is the one who provided the service
+      if (bookingData['supplierId'] != supplierId) {
+        throw Exception('Não tem permissão para avaliar este cliente');
+      }
+
+      // Get service category from booking
+      final serviceCategory = bookingData['packageName'] as String? ?? 'Serviço';
+      final eventDate = (bookingData['eventDate'] as Timestamp?)?.toDate() ?? DateTime.now();
+
+      // Create review document
+      final reviewData = {
+        'bookingId': bookingId,
+        'reviewerId': supplierId,
+        'reviewerType': 'supplier',
+        'reviewedId': clientId,
+        'reviewedType': 'client',
+        'rating': rating,
+        'comment': comment,
+        'tags': tags ?? [],
+        'serviceCategory': serviceCategory,
+        'serviceDate': Timestamp.fromDate(eventDate),
+        'isPublic': true,
+        'isFlagged': false,
+        'status': 'approved', // Auto-approve supplier reviews
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        // Legacy fields for compatibility
+        'supplierId': supplierId,
+        'supplierName': supplierName ?? 'Fornecedor',
+        'clientId': clientId,
+        'isVerified': true,
+      };
+
+      final docRef = await firestore.collection('reviews').add(reviewData);
+
+      // Update booking to mark as reviewed by supplier
+      await firestore.collection('bookings').doc(bookingId).update({
+        'hasSupplierReview': true,
+        'supplierReviewId': docRef.id,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Update client rating stats
+      await _updateClientRating(clientId);
+
+      state = const AsyncValue.data(null);
+      return docRef.id;
+    } catch (e, stackTrace) {
+      state = AsyncValue.error(e, stackTrace);
+      return null;
+    }
+  }
+
+  Future<void> _updateClientRating(String clientId) async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+
+      // Fetch all reviews where the client is the reviewed party
+      final reviewsSnapshot = await firestore
+          .collection('reviews')
+          .where('reviewedId', isEqualTo: clientId)
+          .where('reviewedType', isEqualTo: 'client')
+          .get();
+
+      if (reviewsSnapshot.docs.isEmpty) return;
+
+      // Calculate average rating
+      double totalRating = 0;
+      for (var doc in reviewsSnapshot.docs) {
+        final rating = (doc.data()['rating'] as num?)?.toDouble() ?? 0.0;
+        totalRating += rating;
+      }
+
+      final averageRating = totalRating / reviewsSnapshot.docs.length;
+      final reviewCount = reviewsSnapshot.docs.length;
+
+      // Update user document
+      await firestore.collection('users').doc(clientId).update({
+        'rating': averageRating,
+        'reviewCount': reviewCount,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error updating client rating: $e');
+    }
+  }
 }
 
 final reviewNotifierProvider = StateNotifierProvider<ReviewNotifier, AsyncValue<void>>((ref) {

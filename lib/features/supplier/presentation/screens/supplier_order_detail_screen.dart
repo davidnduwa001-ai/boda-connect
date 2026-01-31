@@ -5,12 +5,14 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/constants/dimensions.dart';
 import '../../../../core/constants/text_styles.dart';
 import '../../../../core/routing/route_names.dart';
 import '../../../../core/models/booking_model.dart';
 import '../../../../core/widgets/loading_widget.dart';
+import '../widgets/rate_client_dialog.dart';
 
 class SupplierOrderDetailScreen extends ConsumerStatefulWidget {
   final BookingModel? booking;
@@ -31,6 +33,7 @@ class _SupplierOrderDetailScreenState
     extends ConsumerState<SupplierOrderDetailScreen> {
   BookingModel? _booking;
   bool _isLoading = false;
+  bool _hasSupplierReview = false;
 
   @override
   void initState() {
@@ -38,6 +41,24 @@ class _SupplierOrderDetailScreenState
     _booking = widget.booking;
     if (_booking == null && widget.bookingId != null) {
       _loadBooking();
+    } else if (_booking != null) {
+      _checkSupplierReview();
+    }
+  }
+
+  Future<void> _checkSupplierReview() async {
+    if (_booking == null) return;
+    try {
+      final bookingDoc = await FirebaseFirestore.instance
+          .collection('bookings')
+          .doc(_booking!.id)
+          .get();
+      if (bookingDoc.exists && mounted) {
+        final hasReview = bookingDoc.data()?['hasSupplierReview'] == true;
+        setState(() => _hasSupplierReview = hasReview);
+      }
+    } catch (e) {
+      // Ignore errors, default to false
     }
   }
 
@@ -64,6 +85,7 @@ class _SupplierOrderDetailScreenState
             _booking = booking;
             _isLoading = false;
           });
+          _checkSupplierReview();
         }
       } else {
         throw Exception('Booking not found');
@@ -757,18 +779,64 @@ class _SupplierOrderDetailScreenState
         );
 
       case BookingStatus.completed:
-        return SizedBox(
-          width: double.infinity,
-          height: AppDimensions.buttonHeight,
-          child: OutlinedButton.icon(
-            onPressed: () => _openChat(booking),
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: const Text('Enviar Mensagem'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.peach,
-              side: const BorderSide(color: AppColors.peach),
+        return Column(
+          children: [
+            // Rate Client Button (only if not already reviewed)
+            if (!_hasSupplierReview) ...[
+              SizedBox(
+                width: double.infinity,
+                height: AppDimensions.buttonHeight,
+                child: ElevatedButton.icon(
+                  onPressed: () => _showRateClientDialog(booking),
+                  icon: const Icon(Icons.star_outline),
+                  label: const Text('Avaliar Cliente'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.peach,
+                    foregroundColor: AppColors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ] else ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle, color: AppColors.success, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Ja avaliou este cliente',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.success,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            SizedBox(
+              width: double.infinity,
+              height: AppDimensions.buttonHeight,
+              child: OutlinedButton.icon(
+                onPressed: () => _openChat(booking),
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: const Text('Enviar Mensagem'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.peach,
+                  side: const BorderSide(color: AppColors.peach),
+                ),
+              ),
             ),
-          ),
+          ],
         );
 
       default:
@@ -1203,6 +1271,22 @@ class _SupplierOrderDetailScreenState
     context.push(
       '${Routes.chatDetail}?userId=${booking.clientId}&userName=${Uri.encodeComponent(booking.clientName ?? 'Cliente')}',
     );
+  }
+
+  Future<void> _showRateClientDialog(BookingModel booking) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => RateClientDialog(
+        bookingId: booking.id,
+        clientId: booking.clientId,
+        clientName: booking.clientName ?? 'Cliente',
+      ),
+    );
+
+    if (result == true && mounted) {
+      setState(() => _hasSupplierReview = true);
+    }
   }
 
   Future<void> _openMaps(String location) async {
