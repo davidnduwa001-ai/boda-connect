@@ -45,15 +45,26 @@ class _PaymentSuccessScreenState extends ConsumerState<PaymentSuccessScreen>
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('PaymentSuccessScreen: Loading booking with ID: ${widget.bookingId}');
     final bookingAsync = ref.watch(bookingDetailProvider(widget.bookingId));
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: bookingAsync.when(
-          data: (booking) => _buildSuccessContent(context, booking),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => _buildErrorContent(context),
+          data: (booking) {
+            debugPrint('PaymentSuccessScreen: Booking loaded: ${booking?.id}');
+            return _buildSuccessContent(context, booking);
+          },
+          loading: () {
+            debugPrint('PaymentSuccessScreen: Loading...');
+            return const Center(child: CircularProgressIndicator());
+          },
+          error: (error, stackTrace) {
+            debugPrint('PaymentSuccessScreen: ERROR loading booking: $error');
+            debugPrint('PaymentSuccessScreen: Stack trace: $stackTrace');
+            return _buildErrorContent(context);
+          },
         ),
       ),
     );
