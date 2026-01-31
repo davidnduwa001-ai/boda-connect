@@ -155,25 +155,24 @@ export const updateBookingStatus = functions
             `Booking ${data.bookingId} status updated: ${currentStatus} → ${data.newStatus} by ${callerId}`
         );
 
-        // 9. Block date in supplier's calendar when confirmed
-        if (data.newStatus === "confirmed") {
-          try {
-            await blockDateForBooking(
-                booking.supplierId,
-                data.bookingId,
-                booking.eventDate,
-                booking.eventName || "Reserva confirmada"
-            );
-            console.log(
-                `Blocked date for booking ${data.bookingId} on supplier ${booking.supplierId}`
-            );
-          } catch (blockError) {
-            // Log error but don't fail the booking confirmation
-            console.error(
-                `Error blocking date for booking ${data.bookingId}:`,
-                blockError
-            );
-          }
+        // 9. Update blocked date in supplier's calendar based on status
+        try {
+          await updateBlockedDateForBooking(
+              booking.supplierId,
+              data.bookingId,
+              booking.eventDate,
+              data.newStatus,
+              booking.clientName || "Cliente"
+          );
+          console.log(
+              `Updated blocked date for booking ${data.bookingId}, status: ${data.newStatus}`
+          );
+        } catch (blockError) {
+          // Log error but don't fail the booking status update
+          console.error(
+              `Error updating blocked date for booking ${data.bookingId}:`,
+              blockError
+          );
         }
 
         // 10. Handle escrow operations based on new status
@@ -268,26 +267,34 @@ async function checkIsAdmin(userId: string): Promise<boolean> {
 }
 
 /**
- * Block a date in supplier's calendar when booking is confirmed
- * Creates an entry in the supplier's blocked_dates subcollection
+ * Update blocked date in supplier's calendar based on booking status
+ * - pending: type='requested' (created in createBooking)
+ * - confirmed: type='reserved'
+ * - completed: type='reserved' (keep blocked)
+ * - cancelled: DELETE the blocked date
  */
-async function blockDateForBooking(
+async function updateBlockedDateForBooking(
     supplierId: string,
     bookingId: string,
     eventDate: admin.firestore.Timestamp | Date,
-    eventName: string
+    newStatus: string,
+    clientName: string
 ): Promise<void> {
-  // Check if this booking already has a blocked date entry
-  const existingQuery = await db
+  const blockedDatesRef = db
       .collection("suppliers")
       .doc(supplierId)
-      .collection("blocked_dates")
-      .where("bookingId", "==", bookingId)
-      .limit(1)
-      .get();
+      .collection("blocked_dates");
 
-  if (!existingQuery.empty) {
-    console.log(`Blocked date already exists for booking ${bookingId}`);
+  // Use booking ID as doc ID (set in createBooking)
+  const blockedDateRef = blockedDatesRef.doc(bookingId);
+  const blockedDateDoc = await blockedDateRef.get();
+
+  // Handle cancellation - remove the blocked date
+  if (newStatus === "cancelled") {
+    if (blockedDateDoc.exists) {
+      await blockedDateRef.delete();
+      console.log(`Deleted blocked date for cancelled booking ${bookingId}`);
+    }
     return;
   }
 
@@ -298,20 +305,24 @@ async function blockDateForBooking(
   } else if (eventDate instanceof Date) {
     dateTimestamp = admin.firestore.Timestamp.fromDate(eventDate);
   } else {
-    // Handle case where eventDate might be a Firestore timestamp object
     dateTimestamp = eventDate as admin.firestore.Timestamp;
   }
 
-  // Create blocked date entry
-  await db
-      .collection("suppliers")
-      .doc(supplierId)
-      .collection("blocked_dates")
-      .add({
-        date: dateTimestamp,
-        reason: eventName,
-        type: "reserved",
-        bookingId: bookingId,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+  // Determine the type based on status
+  let blockedType: "requested" | "reserved" = "requested";
+  let reason = `Pedido de ${clientName}`;
+
+  if (newStatus === "confirmed" || newStatus === "completed" || newStatus === "inProgress") {
+    blockedType = "reserved";
+    reason = `Reserva confirmada - ${clientName}`;
+  }
+
+  // Update or create the blocked date
+  await blockedDateRef.set({
+    date: dateTimestamp,
+    type: blockedType,
+    reason: reason,
+    bookingId: bookingId,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, {merge: true});
 }

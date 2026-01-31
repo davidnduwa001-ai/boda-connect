@@ -531,7 +531,21 @@ export const createBooking = functions
 
               logger.stateTransition("booking", bookingRef.id, "none", "pending", clientId);
 
-              // 12. Create notification for supplier
+              // 12. Block the event date in supplier's calendar (for agenda visibility)
+              const blockedDateRef = db.collection("suppliers")
+                .doc(data.supplierId)
+                .collection("blocked_dates")
+                .doc(bookingRef.id); // Use booking ID as the doc ID for easy cleanup
+
+              await blockedDateRef.set({
+                date: eventDateTimestamp,
+                type: "requested", // Pending booking = requested
+                reason: `Pedido de ${clientData?.displayName || "Cliente"}`,
+                bookingId: bookingRef.id,
+                createdAt: now,
+              });
+
+              // 13. Create notification for supplier
               const notificationRef = db.collection("notifications").doc();
               await notificationRef.set({
                 id: notificationRef.id,
