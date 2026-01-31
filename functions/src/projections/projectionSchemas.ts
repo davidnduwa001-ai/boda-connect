@@ -297,6 +297,10 @@ export type BookingStatusForUI =
 
 /**
  * Maps internal booking status to UI status
+ *
+ * NOTE: "rejected" maps to "cancelled" because:
+ * - Supplier declining = booking is effectively cancelled
+ * - UI shows same "Cancelado" label for both
  */
 export function mapToUIStatus(internalStatus: string): BookingStatusForUI {
   switch (internalStatus) {
@@ -309,12 +313,15 @@ export function mapToUIStatus(internalStatus: string): BookingStatusForUI {
     case "completed":
       return "completed";
     case "cancelled":
+    case "rejected": // Supplier declined = effectively cancelled
       return "cancelled";
     case "expired":
       return "expired";
     case "disputed":
       return "disputed";
     default:
+      // Log unknown status for debugging
+      console.warn(`Unknown booking status: ${internalStatus}, defaulting to pending`);
       return "pending";
   }
 }
