@@ -1,6 +1,7 @@
 import 'package:boda_connect/core/errors/failures.dart';
 import 'package:boda_connect/core/providers/auth_provider.dart';
 import 'package:boda_connect/core/providers/client_view_provider.dart';
+import 'package:boda_connect/core/providers/supplier_provider.dart';
 import 'package:boda_connect/core/providers/supplier_view_provider.dart';
 import 'package:boda_connect/features/chat/data/datasources/chat_remote_datasource.dart';
 import 'package:boda_connect/features/chat/data/repositories/chat_repository_impl.dart';
@@ -39,8 +40,13 @@ final conversationsStreamProvider =
     );
   }
 
+  // Get supplier document ID if user is a supplier
+  // This is needed for legacy conversations where supplier doc ID was used in participants
+  final supplierState = ref.watch(supplierProvider);
+  final supplierDocId = supplierState.currentSupplier?.id;
+
   final repository = ref.watch(chatRepositoryProvider);
-  return repository.getConversations(userId);
+  return repository.getConversations(userId, supplierDocId: supplierDocId);
 });
 
 /// Get a specific conversation by ID
@@ -295,23 +301,41 @@ final chatActionsProvider =
 // ==================== UTILITY PROVIDERS ====================
 
 /// Check if current user is in a conversation
+/// Handles legacy conversations where supplier document ID might be used
 final isParticipantProvider =
     Provider.family<bool, ConversationEntity>((ref, conversation) {
   final userId = ref.watch(currentUserProvider)?.uid ??
                  FirebaseAuth.instance.currentUser?.uid;
   if (userId == null) return false;
-  return conversation.participants.contains(userId);
+
+  // Check by auth UID
+  if (conversation.participants.contains(userId)) return true;
+
+  // For suppliers, also check by document ID
+  final supplierState = ref.watch(supplierProvider);
+  final supplierDocId = supplierState.currentSupplier?.id;
+  if (supplierDocId != null && supplierDocId != userId) {
+    return conversation.participants.contains(supplierDocId);
+  }
+
+  return false;
 });
 
 /// Get the other user in a conversation
+/// Handles legacy conversations where supplier document ID might be used
 final otherUserIdProvider =
     Provider.family<String?, ConversationEntity>((ref, conversation) {
   final userId = ref.watch(currentUserProvider)?.uid ??
                  FirebaseAuth.instance.currentUser?.uid;
   if (userId == null) return null;
 
+  // Get supplier document ID if user is a supplier
+  final supplierState = ref.watch(supplierProvider);
+  final supplierDocId = supplierState.currentSupplier?.id;
+
+  // Find participant that isn't the current user (by auth UID or supplier doc ID)
   return conversation.participants.firstWhere(
-    (id) => id != userId,
+    (id) => id != userId && (supplierDocId == null || id != supplierDocId),
     orElse: () => '',
   );
 });

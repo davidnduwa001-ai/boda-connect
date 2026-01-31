@@ -323,29 +323,65 @@ service cloud.firestore {
     }
 
     // Legacy chats collection - only participants can access
+    // NOTE: Some legacy conversations may have supplier document ID instead of auth UID in participants
     match /chats/{chatId} {
+      // Helper to check if user's supplier doc ID is in participants
+      // This handles cases where participants has supplier doc ID instead of auth UID
+      function isSupplierInParticipants() {
+        // Check if any participant is a supplier doc where user is the owner
+        return resource.data.participants.size() >= 1 &&
+          (
+            // Check first participant
+            (exists(/databases/$(database)/documents/suppliers/$(resource.data.participants[0])) &&
+             get(/databases/$(database)/documents/suppliers/$(resource.data.participants[0])).data.userId == request.auth.uid) ||
+            // Check second participant (if exists)
+            (resource.data.participants.size() >= 2 &&
+             exists(/databases/$(database)/documents/suppliers/$(resource.data.participants[1])) &&
+             get(/databases/$(database)/documents/suppliers/$(resource.data.participants[1])).data.userId == request.auth.uid)
+          );
+      }
+
       // Allow read if user is in participants array OR is the client OR owns the supplier
       allow read: if request.auth != null &&
         (request.auth.uid in resource.data.participants ||
          request.auth.uid == resource.data.clientId ||
          request.auth.uid == resource.data.supplierId ||
-         (resource.data.keys().hasAny(['supplierId']) && isSupplierOwner(resource.data.supplierId)));
+         (resource.data.keys().hasAny(['supplierId']) && isSupplierOwner(resource.data.supplierId)) ||
+         isSupplierInParticipants());
       allow create: if request.auth != null &&
         request.auth.uid in request.resource.data.participants;
       allow update: if request.auth != null &&
-        request.auth.uid in resource.data.participants;
+        (request.auth.uid in resource.data.participants ||
+         request.auth.uid == resource.data.clientId ||
+         (resource.data.keys().hasAny(['supplierId']) && isSupplierOwner(resource.data.supplierId)) ||
+         isSupplierInParticipants());
 
       match /messages/{messageId} {
+        // Helper to check if user's supplier doc ID is in chat participants
+        function isSupplierInChatParticipants() {
+          let chatDoc = get(/databases/$(database)/documents/chats/$(chatId)).data;
+          return chatDoc.participants.size() >= 1 &&
+            (
+              (exists(/databases/$(database)/documents/suppliers/$(chatDoc.participants[0])) &&
+               get(/databases/$(database)/documents/suppliers/$(chatDoc.participants[0])).data.userId == request.auth.uid) ||
+              (chatDoc.participants.size() >= 2 &&
+               exists(/databases/$(database)/documents/suppliers/$(chatDoc.participants[1])) &&
+               get(/databases/$(database)/documents/suppliers/$(chatDoc.participants[1])).data.userId == request.auth.uid)
+            );
+        }
+
         allow read: if request.auth != null &&
           (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants ||
            request.auth.uid == get(/databases/$(database)/documents/chats/$(chatId)).data.clientId ||
            (get(/databases/$(database)/documents/chats/$(chatId)).data.keys().hasAny(['supplierId']) &&
-            isSupplierOwner(get(/databases/$(database)/documents/chats/$(chatId)).data.supplierId)));
+            isSupplierOwner(get(/databases/$(database)/documents/chats/$(chatId)).data.supplierId)) ||
+           isSupplierInChatParticipants());
         allow create: if request.auth != null &&
           (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants ||
            request.auth.uid == get(/databases/$(database)/documents/chats/$(chatId)).data.clientId ||
            (get(/databases/$(database)/documents/chats/$(chatId)).data.keys().hasAny(['supplierId']) &&
-            isSupplierOwner(get(/databases/$(database)/documents/chats/$(chatId)).data.supplierId)));
+            isSupplierOwner(get(/databases/$(database)/documents/chats/$(chatId)).data.supplierId)) ||
+           isSupplierInChatParticipants());
       }
     }
 

@@ -18,10 +18,11 @@ class ChatRepositoryImpl implements ChatRepository {
 
   @override
   Stream<Either<Failure, List<ConversationEntity>>> getConversations(
-    String userId,
-  ) {
+    String userId, {
+    String? supplierDocId,
+  }) {
     try {
-      return _remoteDataSource.getConversations(userId).map((conversations) {
+      return _remoteDataSource.getConversations(userId, supplierDocId: supplierDocId).map((conversations) {
         try {
           final entities =
               conversations.map((model) => model.toEntity()).toList();

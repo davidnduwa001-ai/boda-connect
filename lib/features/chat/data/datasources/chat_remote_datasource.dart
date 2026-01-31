@@ -13,7 +13,9 @@ abstract class ChatRemoteDataSource {
   // ==================== CONVERSATIONS ====================
 
   /// Get all conversations for a user as a stream
-  Stream<List<ConversationModel>> getConversations(String userId);
+  /// [supplierDocId] - Optional: For suppliers, their document ID if different from userId
+  /// This is needed to find legacy conversations where the supplier doc ID was used in participants
+  Stream<List<ConversationModel>> getConversations(String userId, {String? supplierDocId});
 
   /// Get a specific conversation by ID
   Future<ConversationModel> getConversation(String conversationId);
@@ -131,61 +133,53 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   // ==================== CONVERSATIONS ====================
 
   @override
-  Stream<List<ConversationModel>> getConversations(String userId) {
-    debugPrint('🔍 Fetching conversations for user: $userId from both conversations and chats collections');
+  Stream<List<ConversationModel>> getConversations(String userId, {String? supplierDocId}) {
+    debugPrint('🔍 Fetching conversations for user: $userId, supplierDocId: $supplierDocId');
 
-    // Use StreamController to merge both streams
+    // Use StreamController to merge all streams
     late StreamController<List<ConversationModel>> controller;
 
     QuerySnapshot? latestConversations;
     QuerySnapshot? latestChats;
+    QuerySnapshot? latestConversationsBySupplierDoc;
+    QuerySnapshot? latestChatsBySupplierDoc;
+
+    // Track if we need to wait for supplier doc queries
+    final hasSupplierDocId = supplierDocId != null && supplierDocId != userId;
 
     void emitMergedConversations() {
+      // Wait for all required queries to complete
       if (latestConversations == null || latestChats == null) return;
+      if (hasSupplierDocId && (latestConversationsBySupplierDoc == null || latestChatsBySupplierDoc == null)) return;
 
-      debugPrint('📬 Got ${latestConversations!.docs.length} conversations from new collection');
-      debugPrint('📬 Got ${latestChats!.docs.length} conversations from legacy chats');
-
-      // Parse conversations from new collection
-      final newConversations = latestConversations!.docs
-          .map((doc) {
-            try {
-              return ConversationModel.fromFirestore(doc);
-            } catch (e) {
-              debugPrint('⚠️ Error parsing conversation ${doc.id}: $e');
-              return null;
-            }
-          })
-          .whereType<ConversationModel>()
-          .toList();
-
-      // Parse conversations from legacy chats collection
-      final legacyConversations = latestChats!.docs
-          .map((doc) {
-            try {
-              return ConversationModel.fromFirestore(doc);
-            } catch (e) {
-              debugPrint('⚠️ Error parsing legacy chat ${doc.id}: $e');
-              return null;
-            }
-          })
-          .whereType<ConversationModel>()
-          .toList();
-
-      // Merge and deduplicate (in case a conversation exists in both)
-      final allConversationsMap = <String, ConversationModel>{};
-
-      // Add legacy conversations first
-      for (final conv in legacyConversations) {
-        if (conv.isActive) {
-          allConversationsMap[conv.id] = conv;
-        }
+      debugPrint('📬 Got ${latestConversations!.docs.length} conversations (by authUID)');
+      debugPrint('📬 Got ${latestChats!.docs.length} chats (by authUID)');
+      if (hasSupplierDocId) {
+        debugPrint('📬 Got ${latestConversationsBySupplierDoc!.docs.length} conversations (by supplierDocId)');
+        debugPrint('📬 Got ${latestChatsBySupplierDoc!.docs.length} chats (by supplierDocId)');
       }
 
-      // Add new conversations (will override legacy if same ID)
-      for (final conv in newConversations) {
-        if (conv.isActive) {
-          allConversationsMap[conv.id] = conv;
+      // Collect all docs
+      final allDocs = <DocumentSnapshot>[
+        ...latestConversations!.docs,
+        ...latestChats!.docs,
+      ];
+      if (hasSupplierDocId) {
+        allDocs.addAll(latestConversationsBySupplierDoc!.docs);
+        allDocs.addAll(latestChatsBySupplierDoc!.docs);
+      }
+
+      // Parse and deduplicate
+      final allConversationsMap = <String, ConversationModel>{};
+      for (final doc in allDocs) {
+        if (allConversationsMap.containsKey(doc.id)) continue; // Skip duplicates
+        try {
+          final conv = ConversationModel.fromFirestore(doc);
+          if (conv.isActive) {
+            allConversationsMap[conv.id] = conv;
+          }
+        } catch (e) {
+          debugPrint('⚠️ Error parsing conversation ${doc.id}: $e');
         }
       }
 
@@ -204,28 +198,49 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
 
     controller = StreamController<List<ConversationModel>>(
       onListen: () {
-        // Listen to conversations collection
-        final conversationsSub = _conversationsCollection
+        final subscriptions = <StreamSubscription>[];
+
+        // Query by auth UID
+        subscriptions.add(_conversationsCollection
             .where('participants', arrayContains: userId)
             .snapshots()
             .listen((snapshot) {
           latestConversations = snapshot;
           emitMergedConversations();
-        });
+        }));
 
-        // Listen to legacy chats collection
-        final chatsSub = _firestore.collection('chats')
+        subscriptions.add(_firestore.collection('chats')
             .where('participants', arrayContains: userId)
             .snapshots()
             .listen((snapshot) {
           latestChats = snapshot;
           emitMergedConversations();
-        });
+        }));
+
+        // If supplier has a different document ID, also query by that
+        if (hasSupplierDocId) {
+          subscriptions.add(_conversationsCollection
+              .where('participants', arrayContains: supplierDocId)
+              .snapshots()
+              .listen((snapshot) {
+            latestConversationsBySupplierDoc = snapshot;
+            emitMergedConversations();
+          }));
+
+          subscriptions.add(_firestore.collection('chats')
+              .where('participants', arrayContains: supplierDocId)
+              .snapshots()
+              .listen((snapshot) {
+            latestChatsBySupplierDoc = snapshot;
+            emitMergedConversations();
+          }));
+        }
 
         // Clean up subscriptions when stream is cancelled
         controller.onCancel = () {
-          conversationsSub.cancel();
-          chatsSub.cancel();
+          for (final sub in subscriptions) {
+            sub.cancel();
+          }
         };
       },
     );

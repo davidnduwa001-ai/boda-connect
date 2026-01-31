@@ -11,9 +11,11 @@ abstract class ChatRepository {
 
   /// Get all conversations for a user
   /// Returns a stream for real-time updates
+  /// [supplierDocId] - Optional: For suppliers, their document ID if different from userId
   Stream<Either<Failure, List<ConversationEntity>>> getConversations(
-    String userId,
-  );
+    String userId, {
+    String? supplierDocId,
+  });
 
   /// Get a specific conversation by ID
   ResultFuture<ConversationEntity> getConversation(String conversationId);

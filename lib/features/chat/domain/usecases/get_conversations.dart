@@ -12,7 +12,11 @@ class GetConversations {
 
   /// Get all conversations for the specified user
   /// Returns a stream that emits conversation updates in real-time
-  Stream<Either<Failure, List<ConversationEntity>>> call(String userId) {
-    return _repository.getConversations(userId);
+  /// [supplierDocId] - Optional: For suppliers, their document ID if different from userId
+  Stream<Either<Failure, List<ConversationEntity>>> call(
+    String userId, {
+    String? supplierDocId,
+  }) {
+    return _repository.getConversations(userId, supplierDocId: supplierDocId);
   }
 }

@@ -40,6 +40,34 @@ interface ConversationResponse {
   error?: string;
 }
 
+/**
+ * Get auth UID from a supplier document ID
+ * If the ID is a supplier document, returns the userId field (auth UID)
+ * Otherwise returns the ID unchanged (it's already an auth UID)
+ */
+async function getAuthUidFromSupplierId(supplierId: string): Promise<string> {
+  // Check if this is a supplier document ID
+  const supplierDoc = await db.collection("suppliers").doc(supplierId).get();
+  if (supplierDoc.exists) {
+    const data = supplierDoc.data()!;
+    // If supplier has userId field, that's the auth UID
+    if (data.userId && data.userId !== supplierId) {
+      console.log(
+          `getAuthUidFromSupplierId: ${supplierId} is supplier doc, auth UID is ${data.userId}`
+      );
+      return data.userId;
+    }
+    // Otherwise the supplier doc ID IS the auth UID
+    console.log(
+        `getAuthUidFromSupplierId: ${supplierId} is supplier doc with same auth UID`
+    );
+    return supplierId;
+  }
+  // Not a supplier document, return as-is (it's a client auth UID)
+  console.log(`getAuthUidFromSupplierId: ${supplierId} is not a supplier doc`);
+  return supplierId;
+}
+
 // ==================== HELPER FUNCTIONS ====================
 
 /**
@@ -492,8 +520,15 @@ export const getOrCreateConversation = functions
       try {
         const currentUserId = context.auth.uid;
 
+        // IMPORTANT: Resolve otherUserId to auth UID if it's a supplier document ID
+        // This ensures participants array always contains auth UIDs for consistent queries
+        const otherUserAuthUid = await getAuthUidFromSupplierId(data.otherUserId);
+        console.log(
+            `getOrCreateConversation: otherUserId=${data.otherUserId}, resolved auth UID=${otherUserAuthUid}`
+        );
+
         // Can't message yourself
-        if (currentUserId === data.otherUserId) {
+        if (currentUserId === otherUserAuthUid) {
           throw new functions.https.HttpsError(
               "invalid-argument",
               "Não pode iniciar uma conversa consigo mesmo"
@@ -501,7 +536,8 @@ export const getOrCreateConversation = functions
         }
 
         // 3. Check for existing conversation
-        const participants = [currentUserId, data.otherUserId].sort();
+        // Use auth UIDs for participants to ensure consistent querying
+        const participants = [currentUserId, otherUserAuthUid].sort();
 
         // Generate deterministic conversation ID to prevent race conditions
         // Two users trying to create a conversation at the same time will use the same ID
@@ -551,7 +587,7 @@ export const getOrCreateConversation = functions
           };
         }
 
-        // Also check with array-contains (different order)
+        // Also check with array-contains (different order) in conversations
         existingQuery = await db
             .collection("conversations")
             .where("participants", "array-contains", currentUserId)
@@ -559,7 +595,28 @@ export const getOrCreateConversation = functions
 
         for (const doc of existingQuery.docs) {
           const docParticipants = doc.data().participants as string[];
-          if (docParticipants.includes(data.otherUserId)) {
+          // Check for both the original supplier doc ID and the resolved auth UID
+          if (docParticipants.includes(otherUserAuthUid) ||
+              docParticipants.includes(data.otherUserId)) {
+            return {
+              success: true,
+              conversationId: doc.id,
+              isNew: false,
+            };
+          }
+        }
+
+        // Also check legacy chats with array-contains
+        existingQuery = await db
+            .collection("chats")
+            .where("participants", "array-contains", currentUserId)
+            .get();
+
+        for (const doc of existingQuery.docs) {
+          const docParticipants = doc.data().participants as string[];
+          // Check for both the original supplier doc ID and the resolved auth UID
+          if (docParticipants.includes(otherUserAuthUid) ||
+              docParticipants.includes(data.otherUserId)) {
             return {
               success: true,
               conversationId: doc.id,
@@ -587,23 +644,23 @@ export const getOrCreateConversation = functions
           // Current user is supplier, other is client
           supplierId = currentUserId;
           supplierName = currentUserInfo.name;
-          clientId = data.otherUserId;
+          clientId = otherUserAuthUid; // Use auth UID for consistent queries
           clientName = otherUserInfo.name;
         } else if (!isCurrentUserSupplier && isOtherUserSupplier) {
           // Current user is client, other is supplier
           clientId = currentUserId;
           clientName = currentUserInfo.name;
-          supplierId = data.otherUserId;
+          supplierId = otherUserAuthUid; // Use auth UID for consistent queries
           supplierName = otherUserInfo.name;
         } else {
-          // Both same type - use alphabetical order
-          if (currentUserId < data.otherUserId) {
+          // Both same type - use alphabetical order based on auth UIDs
+          if (currentUserId < otherUserAuthUid) {
             clientId = currentUserId;
             clientName = currentUserInfo.name;
-            supplierId = data.otherUserId;
+            supplierId = otherUserAuthUid;
             supplierName = otherUserInfo.name;
           } else {
-            clientId = data.otherUserId;
+            clientId = otherUserAuthUid;
             clientName = otherUserInfo.name;
             supplierId = currentUserId;
             supplierName = currentUserInfo.name;
@@ -626,7 +683,7 @@ export const getOrCreateConversation = functions
           updatedAt: now,
           unreadCount: {
             [currentUserId]: 0,
-            [data.otherUserId]: 0,
+            [otherUserAuthUid]: 0, // Use auth UID for consistent queries
           },
           isActive: true,
         };
