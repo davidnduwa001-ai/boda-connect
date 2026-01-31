@@ -298,6 +298,8 @@ class BookingDomainService {
         return 5;
       case BookingStatus.cancelled:
         return 6;
+      case BookingStatus.rejected:
+        return 6; // Same priority as cancelled
       case BookingStatus.refunded:
         return 7; // Lowest priority
     }

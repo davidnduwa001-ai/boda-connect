@@ -289,6 +289,11 @@ class _SupplierOrdersScreenState extends ConsumerState<SupplierOrdersScreen>
         statusText = 'Cancelado';
         statusIcon = Icons.cancel_outlined;
         break;
+      case 'rejected':
+        statusColor = AppColors.error;
+        statusText = 'Recusado';
+        statusIcon = Icons.block;
+        break;
       case 'disputed':
         statusColor = AppColors.error;
         statusText = 'Em Disputa';

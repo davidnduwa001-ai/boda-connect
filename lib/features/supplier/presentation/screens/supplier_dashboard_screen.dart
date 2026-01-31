@@ -645,6 +645,8 @@ class _SupplierDashboardScreenState extends ConsumerState<SupplierDashboardScree
         return 'Concluído';
       case 'cancelled':
         return 'Cancelado';
+      case 'rejected':
+        return 'Recusado';
       case 'disputed':
         return 'Disputado';
       default:
@@ -664,6 +666,7 @@ class _SupplierDashboardScreenState extends ConsumerState<SupplierDashboardScree
       case 'completed':
         return AppColors.success;
       case 'cancelled':
+      case 'rejected':
       case 'disputed':
         return AppColors.error;
       default:

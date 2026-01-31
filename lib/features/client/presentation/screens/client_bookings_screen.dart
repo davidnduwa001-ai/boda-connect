@@ -408,6 +408,9 @@ class _ClientBookingsScreenState extends ConsumerState<ClientBookingsScreen>
       case 'cancelled':
         color = AppColors.error;
         text = 'Cancelado';
+      case 'rejected':
+        color = AppColors.error;
+        text = 'Recusado';
       case 'disputed':
         color = AppColors.error;
         text = 'Em Disputa';

@@ -269,6 +269,12 @@ class _SupplierOrderDetailScreenState
         statusIcon = Icons.cancel_outlined;
         statusDescription = 'Reserva cancelada';
         break;
+      case BookingStatus.rejected:
+        statusColor = AppColors.error;
+        statusText = 'Recusado';
+        statusIcon = Icons.block;
+        statusDescription = 'Reserva foi recusada';
+        break;
       case BookingStatus.disputed:
         statusColor = AppColors.error;
         statusText = 'Em Disputa';
