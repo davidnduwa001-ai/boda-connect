@@ -359,9 +359,10 @@ export async function rebuildSupplierView(
       .slice(0, 10);
 
     // upcomingEvents: eventDate ASC (soonest first) - agenda view
+    // Include pending, confirmed, and inProgress bookings
     const upcomingEvents: SupplierEventSummary[] = allBookings
       .filter((b) =>
-        (b.status === "confirmed" || b.status === "inProgress") &&
+        (b.status === "pending" || b.status === "confirmed" || b.status === "inProgress") &&
         b.eventDate.toMillis() > now.toMillis()
       )
       .sort((a, b) => a.eventDate.toMillis() - b.eventDate.toMillis())
