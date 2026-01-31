@@ -14,6 +14,7 @@ import 'package:boda_connect/core/models/review_category_models.dart';
 import 'package:boda_connect/core/services/deep_link_service.dart';
 import 'package:boda_connect/core/widgets/app_cached_image.dart';
 import 'package:boda_connect/core/widgets/tier_badge.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:boda_connect/features/client/presentation/widgets/availability_calendar_widget.dart';
 import 'package:boda_connect/features/client/presentation/widgets/submit_review_dialog.dart';
 import 'package:flutter/material.dart';
@@ -2094,7 +2095,7 @@ class _ClientSupplierDetailScreenState extends ConsumerState<ClientSupplierDetai
               CircleAvatar(
                 radius: 20,
                 backgroundColor: AppColors.peachLight,
-                backgroundImage: review.clientPhoto != null ? NetworkImage(review.clientPhoto!) : null,
+                backgroundImage: review.clientPhoto != null ? CachedNetworkImageProvider(review.clientPhoto!) : null,
                 child: review.clientPhoto == null
                     ? Text(
                         initials,

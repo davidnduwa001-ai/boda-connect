@@ -12,6 +12,7 @@ import 'package:boda_connect/core/services/seed_database_service.dart';
 import 'package:boda_connect/core/services/cleanup_database_service.dart';
 import 'package:boda_connect/core/services/storage_service.dart';
 import 'package:boda_connect/features/client/presentation/widgets/client_bottom_nav.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -190,7 +191,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
                   shape: BoxShape.circle,
                   image: photoUrl != null && photoUrl.isNotEmpty
                       ? DecorationImage(
-                          image: NetworkImage(photoUrl),
+                          image: CachedNetworkImageProvider(photoUrl),
                           fit: BoxFit.cover,
                         )
                       : null,

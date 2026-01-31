@@ -7,6 +7,7 @@ import 'package:boda_connect/core/services/presence_service.dart';
 import 'package:boda_connect/core/widgets/loading_widget.dart';
 import 'package:boda_connect/features/chat/domain/entities/conversation_entity.dart';
 import 'package:boda_connect/features/chat/presentation/providers/chat_provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -256,7 +257,7 @@ class _ConversationItemState extends ConsumerState<_ConversationItem> {
                     radius: 28,
                     backgroundColor: AppColors.peachLight,
                     backgroundImage: otherUserPhoto != null
-                        ? NetworkImage(otherUserPhoto)
+                        ? CachedNetworkImageProvider(otherUserPhoto)
                         : null,
                     child: otherUserPhoto == null
                         ? Text(
