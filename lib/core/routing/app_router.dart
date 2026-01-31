@@ -1,5 +1,6 @@
 import 'package:boda_connect/core/models/booking_model.dart';
 import 'package:boda_connect/core/models/package_model.dart';
+import 'package:boda_connect/core/providers/supplier_view_provider.dart';
 import 'package:boda_connect/core/models/user_type.dart';
 import 'package:boda_connect/core/routing/route_names.dart';
 import 'package:boda_connect/features/auth/presentation/screens/account_type_screen.dart';
@@ -306,12 +307,17 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: Routes.supplierOrderDetail,
       builder: (context, state) {
-        // Support both extra data (BookingModel) and query parameter (bookingId)
+        // Support BookingModel, SupplierBookingSummary, and query parameter
         final extra = state.extra;
         final bookingId = state.uri.queryParameters['bookingId'];
 
         if (extra is BookingModel) {
           return SupplierOrderDetailScreen(booking: extra);
+        }
+
+        // Handle SupplierBookingSummary from orders screen
+        if (extra is SupplierBookingSummary) {
+          return SupplierOrderDetailScreen(bookingId: extra.bookingId);
         }
 
         return SupplierOrderDetailScreen(bookingId: bookingId);

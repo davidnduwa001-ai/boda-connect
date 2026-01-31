@@ -538,25 +538,26 @@ final bookingProvider = StateNotifierProvider<BookingNotifier, BookingState>((re
   return BookingNotifier(repository, ref);
 });
 
-// Convenience providers
+// Convenience providers - use select() for granular updates
+// This avoids rebuilding when unrelated state changes
 final clientBookingsProvider = Provider<List<BookingModel>>((ref) {
-  return ref.watch(bookingProvider).clientBookings;
+  return ref.watch(bookingProvider.select((state) => state.clientBookings));
 });
 
 final upcomingBookingsProvider = Provider<List<BookingModel>>((ref) {
-  return ref.watch(bookingProvider).upcomingClientBookings;
+  return ref.watch(bookingProvider.select((state) => state.upcomingClientBookings));
 });
 
 final pastBookingsProvider = Provider<List<BookingModel>>((ref) {
-  return ref.watch(bookingProvider).pastClientBookings;
+  return ref.watch(bookingProvider.select((state) => state.pastClientBookings));
 });
 
 final supplierBookingsProvider = Provider<List<BookingModel>>((ref) {
-  return ref.watch(bookingProvider).supplierBookings;
+  return ref.watch(bookingProvider.select((state) => state.supplierBookings));
 });
 
 final pendingBookingsProvider = Provider<List<BookingModel>>((ref) {
-  return ref.watch(bookingProvider).pendingSupplierBookings;
+  return ref.watch(bookingProvider.select((state) => state.pendingSupplierBookings));
 });
 
 // Single booking detail
@@ -574,7 +575,8 @@ final bookingDetailProvider = FutureProvider.family<BookingModel?, String>((ref,
 ///            final bookings = clientView.value?.recentBookings ?? [];
 // ignore: deprecated_member_use_from_same_package
 final clientBookingsStreamProvider = StreamProvider<List<BookingModel>>((ref) {
-  final userId = ref.watch(authProvider).firebaseUser?.uid;
+  // Use select() to only rebuild when userId changes, not on any auth state change
+  final userId = ref.watch(authProvider.select((auth) => auth.firebaseUser?.uid));
   if (userId == null) return Stream.value([]);
 
   final repository = ref.watch(bookingRepositoryProvider);

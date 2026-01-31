@@ -20,35 +20,20 @@ class SupplierOrdersScreen extends ConsumerStatefulWidget {
 }
 
 class _SupplierOrdersScreenState extends ConsumerState<SupplierOrdersScreen>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 3, vsync: this);
-
-    // Load supplier view from projections
-    Future.microtask(() {
-      ref.read(supplierViewProvider.notifier).refresh();
-    });
+    // No manual refresh needed - stream provider handles real-time updates
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    // Refresh projections when app comes back to foreground
-    if (state == AppLifecycleState.resumed) {
-      ref.read(supplierViewProvider.notifier).refresh();
-    }
   }
 
   @override
@@ -107,17 +92,15 @@ class _SupplierOrdersScreenState extends ConsumerState<SupplierOrdersScreen>
       );
     }
 
-    final viewState = ref.watch(supplierViewProvider);
+    // REAL-TIME: Use stream provider for automatic updates
+    final supplierViewAsync = ref.watch(supplierViewStreamProvider);
 
-    // Use projection providers for filtered bookings
+    // Use projection providers for filtered bookings (now real-time)
     final pendingBookings = ref.watch(supplierPendingBookingsProvider);
     final confirmedBookings = ref.watch(supplierConfirmedBookingsProvider);
 
-    // History bookings: filter from all bookings in view
-    final allBookings = viewState.view?.recentBookings ?? [];
-    final historyBookings = allBookings
-        .where((b) => b.status == 'completed' || b.status == 'cancelled' || b.status == 'disputed')
-        .toList();
+    // History bookings: use dedicated history provider for complete history
+    final historyBookings = ref.watch(supplierHistoryBookingsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -194,7 +177,7 @@ class _SupplierOrdersScreenState extends ConsumerState<SupplierOrdersScreen>
           ],
         ),
       ),
-      body: viewState.isLoading
+      body: supplierViewAsync.isLoading
           ? const ShimmerListLoading(itemCount: 4, itemHeight: 180)
           : TabBarView(
               controller: _tabController,

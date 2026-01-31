@@ -104,6 +104,7 @@ class SupplierEventSummary {
   final String? clientPhotoUrl;
   final String eventName;
   final DateTime eventDate;
+  final String? eventTime;
   final String? eventLocation;
   final String status;
 
@@ -113,6 +114,7 @@ class SupplierEventSummary {
     this.clientPhotoUrl,
     required this.eventName,
     required this.eventDate,
+    this.eventTime,
     this.eventLocation,
     required this.status,
   });
@@ -124,6 +126,7 @@ class SupplierEventSummary {
       clientPhotoUrl: data['clientPhotoUrl'] as String?,
       eventName: data['eventName'] as String? ?? 'Evento',
       eventDate: (data['eventDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      eventTime: data['eventTime'] as String?,
       eventLocation: data['eventLocation'] as String?,
       status: data['status'] as String? ?? 'pending',
     );
@@ -479,93 +482,125 @@ final supplierViewStreamProvider = StreamProvider<SupplierView?>((ref) {
       .map((doc) => doc.exists ? SupplierView.fromFirestore(doc) : null);
 });
 
+// ==================== REAL-TIME DERIVED PROVIDERS ====================
+// All providers below use supplierViewStreamProvider for real-time updates
+// This ensures UI updates immediately when data changes in Firestore
+
 /// Pending bookings from projection (for "Pedidos Pendentes")
-/// Filters out invalid bookings (totalAmount = 0 or empty bookingId)
+/// REAL-TIME: Updates automatically when projection changes
 final supplierPendingBookingsProvider = Provider<List<SupplierBookingSummary>>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  final bookings = viewState.view?.pendingBookings ?? [];
-  // Filter out invalid/corrupted bookings (only check for valid bookingId)
+  final view = ref.watch(supplierViewStreamProvider).valueOrNull;
+  final bookings = view?.pendingBookings ?? [];
   return bookings.where((b) => b.bookingId.isNotEmpty).toList();
 });
 
 /// Confirmed bookings from projection
-/// Filters out invalid bookings (totalAmount = 0 or empty bookingId)
+/// REAL-TIME: Updates automatically when projection changes
 final supplierConfirmedBookingsProvider = Provider<List<SupplierBookingSummary>>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  final bookings = viewState.view?.confirmedBookings ?? [];
-  // Filter out invalid/corrupted bookings (only check for valid bookingId)
+  final view = ref.watch(supplierViewStreamProvider).valueOrNull;
+  final bookings = view?.confirmedBookings ?? [];
   return bookings.where((b) => b.bookingId.isNotEmpty).toList();
 });
 
 /// Recent bookings from projection (for "Pedidos Recentes")
-/// Filters out invalid bookings (totalAmount = 0 or empty bookingId)
+/// REAL-TIME: Updates automatically when projection changes
 final supplierRecentBookingsProvider = Provider<List<SupplierBookingSummary>>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  final bookings = viewState.view?.recentBookings ?? [];
-  // Filter out invalid/corrupted bookings (only check for valid bookingId)
+  final view = ref.watch(supplierViewStreamProvider).valueOrNull;
+  final bookings = view?.recentBookings ?? [];
   return bookings.where((b) => b.bookingId.isNotEmpty).toList();
 });
 
 /// Upcoming events from projection (for "Próximos Eventos")
-/// Filters out invalid events (empty bookingId)
+/// REAL-TIME: Updates automatically when projection changes
 final supplierUpcomingEventsProvider = Provider<List<SupplierEventSummary>>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  final events = viewState.view?.upcomingEvents ?? [];
-  // Filter out invalid/corrupted events that failed to create properly
+  final view = ref.watch(supplierViewStreamProvider).valueOrNull;
+  final events = view?.upcomingEvents ?? [];
   return events.where((e) => e.bookingId.isNotEmpty).toList();
 });
 
 /// Dashboard stats from projection
+/// REAL-TIME: Updates automatically when projection changes
 final supplierDashboardStatsProvider = Provider<SupplierDashboardStats>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.dashboardStats ?? const SupplierDashboardStats();
+  final view = ref.watch(supplierViewStreamProvider).valueOrNull;
+  return view?.dashboardStats ?? const SupplierDashboardStats();
 });
 
 /// Unread message count from projection (for badges)
+/// REAL-TIME: Updates automatically when projection changes
 final supplierUnreadMessagesProvider = Provider<int>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.unreadMessages ?? 0;
+  final view = ref.watch(supplierViewStreamProvider).valueOrNull;
+  return view?.unreadMessages ?? 0;
 });
 
 /// Unread notification count from projection (for badges)
-/// UI-FIRST: Uses projection instead of direct Firestore query
+/// REAL-TIME: Updates automatically when projection changes
 final supplierUnreadNotificationsProvider = Provider<int>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.unreadNotifications ?? 0;
+  final view = ref.watch(supplierViewStreamProvider).valueOrNull;
+  return view?.unreadNotifications ?? 0;
 });
 
 /// Pending bookings count from projection (for badges)
+/// REAL-TIME: Updates automatically when projection changes
 final supplierPendingCountProvider = Provider<int>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.pendingBookingsCount ?? 0;
+  final view = ref.watch(supplierViewStreamProvider).valueOrNull;
+  return view?.pendingBookingsCount ?? 0;
 });
 
 /// Earnings summary from projection
+/// REAL-TIME: Updates automatically when projection changes
 final supplierEarningsSummaryProvider = Provider<SupplierEarningsSummary>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.earningsSummary ?? const SupplierEarningsSummary();
+  final view = ref.watch(supplierViewStreamProvider).valueOrNull;
+  return view?.earningsSummary ?? const SupplierEarningsSummary();
 });
 
 /// Availability summary from projection
+/// REAL-TIME: Updates automatically when projection changes
 final supplierAvailabilitySummaryProvider = Provider<SupplierAvailabilitySummary>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.availabilitySummary ?? const SupplierAvailabilitySummary();
+  final view = ref.watch(supplierViewStreamProvider).valueOrNull;
+  return view?.availabilitySummary ?? const SupplierAvailabilitySummary();
 });
 
 /// Blocked dates from projection (for calendar)
+/// REAL-TIME: Updates automatically when projection changes
 final supplierBlockedDatesFromViewProvider = Provider<List<SupplierBlockedDateSummary>>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.blockedDates ?? [];
+  final view = ref.watch(supplierViewStreamProvider).valueOrNull;
+  return view?.blockedDates ?? [];
 });
 
 /// Account flags from projection (for alerts/warnings)
+/// REAL-TIME: Updates automatically when projection changes
 final supplierAccountFlagsProvider = Provider<SupplierAccountFlags>((ref) {
-  final viewState = ref.watch(supplierViewProvider);
-  return viewState.view?.accountFlags ?? const SupplierAccountFlags();
+  final view = ref.watch(supplierViewStreamProvider).valueOrNull;
+  return view?.accountFlags ?? const SupplierAccountFlags();
 });
 
 /// Is supplier bookable (from projection account flags)
+/// REAL-TIME: Updates automatically when projection changes
 final isSupplierBookableFromViewProvider = Provider<bool>((ref) {
   final flags = ref.watch(supplierAccountFlagsProvider);
   return flags.isBookable;
+});
+
+/// History bookings from projection (completed, cancelled, disputed)
+/// REAL-TIME: Updates automatically when projection changes
+final supplierHistoryBookingsProvider = Provider<List<SupplierBookingSummary>>((ref) {
+  final view = ref.watch(supplierViewStreamProvider).valueOrNull;
+  if (view == null) return [];
+
+  // Combine all booking sources
+  final allBookings = <SupplierBookingSummary>{};
+  allBookings.addAll(view.pendingBookings);
+  allBookings.addAll(view.confirmedBookings);
+  allBookings.addAll(view.recentBookings);
+
+  // Filter for history statuses only
+  final historyStatuses = {'completed', 'cancelled', 'disputed', 'refunded'};
+  final historyBookings = allBookings
+      .where((b) => historyStatuses.contains(b.status) && b.bookingId.isNotEmpty)
+      .toList();
+
+  // Sort by event date descending (most recent first)
+  historyBookings.sort((a, b) => b.eventDate.compareTo(a.eventDate));
+
+  return historyBookings;
 });

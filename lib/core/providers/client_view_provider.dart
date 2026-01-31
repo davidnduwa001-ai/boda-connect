@@ -300,47 +300,55 @@ final clientViewStreamProvider = StreamProvider<ClientView?>((ref) {
       .map((doc) => doc.exists ? ClientView.fromFirestore(doc) : null);
 });
 
+// ==================== REAL-TIME DERIVED PROVIDERS ====================
+// All providers below use clientViewStreamProvider for real-time updates
+
 /// Active bookings from projection (for dashboard)
+/// REAL-TIME: Updates automatically when projection changes
 final clientActiveBookingsProvider = Provider<List<ClientBookingSummary>>((ref) {
-  final viewState = ref.watch(clientViewProvider);
-  return viewState.view?.activeBookings ?? [];
+  final view = ref.watch(clientViewStreamProvider).valueOrNull;
+  return view?.activeBookings ?? [];
 });
 
 /// Recent bookings from projection (for "Pedidos Recentes")
+/// REAL-TIME: Updates automatically when projection changes
 final clientRecentBookingsProvider = Provider<List<ClientBookingSummary>>((ref) {
-  final viewState = ref.watch(clientViewProvider);
-  return viewState.view?.recentBookings ?? [];
+  final view = ref.watch(clientViewStreamProvider).valueOrNull;
+  return view?.recentBookings ?? [];
 });
 
 /// Upcoming events from projection (for "Próximos Eventos")
+/// REAL-TIME: Updates automatically when projection changes
 final clientUpcomingEventsProvider = Provider<List<ClientEventSummary>>((ref) {
-  final viewState = ref.watch(clientViewProvider);
-  return viewState.view?.upcomingEvents ?? [];
+  final view = ref.watch(clientViewStreamProvider).valueOrNull;
+  return view?.upcomingEvents ?? [];
 });
 
 /// Unread message count from projection (for badges)
+/// REAL-TIME: Updates automatically when projection changes
 final clientUnreadMessagesProvider = Provider<int>((ref) {
-  final viewState = ref.watch(clientViewProvider);
-  return viewState.view?.unreadMessages ?? 0;
+  final view = ref.watch(clientViewStreamProvider).valueOrNull;
+  return view?.unreadMessages ?? 0;
 });
 
 /// Unread notification count from projection (for badges)
-/// UI-FIRST: Uses projection instead of direct Firestore query
+/// REAL-TIME: Updates automatically when projection changes
 final clientUnreadNotificationsProvider = Provider<int>((ref) {
-  final viewState = ref.watch(clientViewProvider);
-  return viewState.view?.unreadNotifications ?? 0;
+  final view = ref.watch(clientViewStreamProvider).valueOrNull;
+  return view?.unreadNotifications ?? 0;
 });
 
 /// Cart item count from projection
+/// REAL-TIME: Updates automatically when projection changes
 final clientCartCountProvider = Provider<int>((ref) {
-  final viewState = ref.watch(clientViewProvider);
-  return viewState.view?.cartItemCount ?? 0;
+  final view = ref.watch(clientViewStreamProvider).valueOrNull;
+  return view?.cartItemCount ?? 0;
 });
 
 /// Payment summary from projection
+/// REAL-TIME: Updates automatically when projection changes
 final clientPaymentSummaryProvider = Provider<Map<String, double>>((ref) {
-  final viewState = ref.watch(clientViewProvider);
-  final view = viewState.view;
+  final view = ref.watch(clientViewStreamProvider).valueOrNull;
   return {
     'pending': view?.pendingPayments ?? 0,
     'spent': view?.totalSpent ?? 0,

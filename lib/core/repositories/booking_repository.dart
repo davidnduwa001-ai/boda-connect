@@ -11,6 +11,52 @@ class BookingRepository {
   final FirestoreService _firestoreService = FirestoreService();
   final BlockedDatesService _blockedDatesService = BlockedDatesService();
 
+  // ==================== RETRY UTILITY ====================
+
+  /// Retry a Cloud Function call with exponential backoff
+  /// Retries on network errors, not on business logic errors
+  Future<T> _retryCloudFunction<T>(
+    Future<T> Function() operation, {
+    int maxRetries = 3,
+    Duration initialDelay = const Duration(seconds: 1),
+  }) async {
+    int attempt = 0;
+    Duration delay = initialDelay;
+
+    while (true) {
+      try {
+        return await operation();
+      } on FirebaseFunctionsException catch (e) {
+        // Don't retry business logic errors (invalid-argument, permission-denied, etc.)
+        if (e.code != 'unavailable' && e.code != 'deadline-exceeded' && e.code != 'internal') {
+          rethrow;
+        }
+        attempt++;
+        if (attempt >= maxRetries) {
+          Log.fail('Cloud Function failed after $maxRetries attempts: ${e.message}');
+          rethrow;
+        }
+        Log.w('Cloud Function error (attempt $attempt/$maxRetries): ${e.code} - retrying in ${delay.inSeconds}s');
+        await Future.delayed(delay);
+        delay *= 2; // Exponential backoff
+      } catch (e) {
+        // Network or timeout errors - retry
+        if (e.toString().contains('network') || e.toString().contains('timeout')) {
+          attempt++;
+          if (attempt >= maxRetries) {
+            Log.fail('Cloud Function failed after $maxRetries attempts: $e');
+            rethrow;
+          }
+          Log.w('Network error (attempt $attempt/$maxRetries) - retrying in ${delay.inSeconds}s');
+          await Future.delayed(delay);
+          delay *= 2;
+        } else {
+          rethrow;
+        }
+      }
+    }
+  }
+
   // ==================== BOOKING CRUD ====================
 
   /// Firebase Functions instance
@@ -19,6 +65,7 @@ class BookingRepository {
 
   /// Create a new booking via Cloud Function
   /// Server handles validation, conflict checking, and stats updates
+  /// Includes retry logic for network failures
   Future<String> createBooking(BookingModel booking) async {
     // Validate event date is not blocked (client-side pre-check)
     final isBlocked = await _blockedDatesService.isDateBlocked(
@@ -30,28 +77,28 @@ class BookingRepository {
       throw Exception('Esta data está indisponível. O fornecedor bloqueou esta data.');
     }
 
+    // Format event date as YYYY-MM-DD string
+    final eventDateStr =
+        '${booking.eventDate.year}-${booking.eventDate.month.toString().padLeft(2, '0')}-${booking.eventDate.day.toString().padLeft(2, '0')}';
+
     try {
-      // Call the createBooking Cloud Function for server-side validation
-      // and atomic conflict checking
-      final callable = _functions.httpsCallable('createBooking');
-
-      // Format event date as YYYY-MM-DD string
-      final eventDateStr =
-          '${booking.eventDate.year}-${booking.eventDate.month.toString().padLeft(2, '0')}-${booking.eventDate.day.toString().padLeft(2, '0')}';
-
-      final result = await callable.call<Map<String, dynamic>>({
-        'supplierId': booking.supplierId,
-        'packageId': booking.packageId,
-        'eventDate': eventDateStr,
-        'startTime': booking.eventTime,
-        'notes': booking.clientNotes ?? booking.notes,
-        'eventName': booking.eventName,
-        'eventLocation': booking.eventLocation,
-        'guestCount': booking.guestCount,
-        'clientRequestId': booking.id.isNotEmpty ? booking.id : null,
-        'totalPrice': booking.totalPrice,
-        'packageName': booking.packageName,
-        'selectedCustomizations': booking.selectedCustomizations,
+      // Call Cloud Function with retry logic for network failures
+      final result = await _retryCloudFunction(() async {
+        final callable = _functions.httpsCallable('createBooking');
+        return await callable.call<Map<String, dynamic>>({
+          'supplierId': booking.supplierId,
+          'packageId': booking.packageId,
+          'eventDate': eventDateStr,
+          'startTime': booking.eventTime,
+          'notes': booking.clientNotes ?? booking.notes,
+          'eventName': booking.eventName,
+          'eventLocation': booking.eventLocation,
+          'guestCount': booking.guestCount,
+          'clientRequestId': booking.id.isNotEmpty ? booking.id : null,
+          'totalPrice': booking.totalPrice,
+          'packageName': booking.packageName,
+          'selectedCustomizations': booking.selectedCustomizations,
+        });
       });
 
       final data = result.data;

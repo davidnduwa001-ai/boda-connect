@@ -46,25 +46,44 @@ class ConversationModel extends ConversationEntity {
 
   /// Create ConversationModel from Firestore document
   factory ConversationModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as DataMap;
+    final data = doc.data() as DataMap? ?? {};
+
+    // Parse participants safely
+    final participantsRaw = data['participants'];
+    final participants = participantsRaw is List
+        ? List<String>.from(participantsRaw.map((e) => e?.toString() ?? '').where((e) => e.isNotEmpty))
+        : <String>[];
+
+    // Parse required IDs with fallback
+    final clientId = data['clientId'] as String? ?? '';
+    final supplierId = data['supplierId'] as String? ?? '';
+
+    // Parse timestamps safely
+    final createdAtRaw = data['createdAt'];
+    final updatedAtRaw = data['updatedAt'];
+    final lastMessageAtRaw = data['lastMessageAt'];
+
+    final now = DateTime.now();
+    final createdAt = createdAtRaw is Timestamp ? createdAtRaw.toDate() : now;
+    final updatedAt = updatedAtRaw is Timestamp ? updatedAtRaw.toDate() : now;
+    final lastMessageAt = lastMessageAtRaw is Timestamp ? lastMessageAtRaw.toDate() : null;
+
     return ConversationModel(
       id: doc.id,
-      participants: List<String>.from(data['participants'] as List<dynamic>),
-      clientId: data['clientId'] as String,
-      supplierId: data['supplierId'] as String,
+      participants: participants,
+      clientId: clientId,
+      supplierId: supplierId,
       clientName: data['clientName'] as String?,
       supplierName: data['supplierName'] as String?,
       clientPhoto: data['clientPhoto'] as String?,
       supplierPhoto: data['supplierPhoto'] as String?,
       lastMessage: data['lastMessage'] as String?,
-      lastMessageAt: data['lastMessageAt'] != null
-          ? (data['lastMessageAt'] as Timestamp).toDate()
-          : null,
+      lastMessageAt: lastMessageAt,
       lastMessageSenderId: data['lastMessageSenderId'] as String?,
       unreadCount: _parseUnreadCount(data['unreadCount']),
       isActive: data['isActive'] as bool? ?? true,
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
-      updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+      createdAt: createdAt,
+      updatedAt: updatedAt,
     );
   }
 
