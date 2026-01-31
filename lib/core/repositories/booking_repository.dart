@@ -33,12 +33,14 @@ class BookingRepository {
     try {
       // Call the createBooking Cloud Function for server-side validation
       // and atomic conflict checking
+      Log.info('BookingRepository: Calling createBooking Cloud Function...');
       final callable = _functions.httpsCallable('createBooking');
 
       // Format event date as YYYY-MM-DD string
       final eventDateStr =
           '${booking.eventDate.year}-${booking.eventDate.month.toString().padLeft(2, '0')}-${booking.eventDate.day.toString().padLeft(2, '0')}';
 
+      Log.info('BookingRepository: packageId=${booking.packageId}, supplierId=${booking.supplierId}');
       final result = await callable.call<Map<String, dynamic>>({
         'supplierId': booking.supplierId,
         'packageId': booking.packageId,
@@ -53,6 +55,7 @@ class BookingRepository {
         'packageName': booking.packageName,
         'selectedCustomizations': booking.selectedCustomizations,
       });
+      Log.info('BookingRepository: Cloud Function returned');
 
       final data = result.data;
       if (data['success'] != true) {
