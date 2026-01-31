@@ -40,6 +40,9 @@ class ClientBookingSummary {
     required this.createdAt,
   });
 
+  /// Backwards-compatible getter for code using totalPrice instead of totalAmount
+  int get totalPrice => totalAmount.toInt();
+
   factory ClientBookingSummary.fromMap(Map<String, dynamic> data) {
     return ClientBookingSummary(
       bookingId: data['bookingId'] as String? ?? '',
