@@ -151,7 +151,8 @@ function sanitizeBookingForSupplier(
 ): SupplierBooking {
   const data = doc.data()!;
   const status = data.status || "pending";
-  const totalPrice = data.totalPrice || 0;
+  // Use totalAmount (new field) with fallback to totalPrice (legacy)
+  const totalPrice = data.totalAmount || data.totalPrice || 0;
   const paidAmount = data.paidAmount || 0;
 
   return {
@@ -545,8 +546,8 @@ export const respondToBooking = functions
         // 7. Payment gate enforcement for confirmation
         if (data.action === "confirm") {
           const paidAmount = booking.paidAmount || 0;
-          // totalPrice available for future percentage-based payment validation
-          const _totalPrice = booking.totalPrice || 0;
+          // totalAmount/totalPrice available for future percentage-based payment validation
+          const _totalPrice = booking.totalAmount || booking.totalPrice || 0;
           void _totalPrice; // Marked for future use
 
           // Check if payment is required (configurable - at least signal/deposit)
@@ -579,7 +580,40 @@ export const respondToBooking = functions
 
         await bookingRef.update(updates);
 
-        // 8.5 If rejecting, remove any blocked_dates entry for this booking
+        // 8.5 If confirming, block the date to prevent double-booking
+        if (data.action === "confirm") {
+          const eventDate = booking.eventDate?.toDate?.() || new Date(booking.eventDate);
+          const dateStr = eventDate.toISOString().split("T")[0];
+
+          // Check if date is already blocked for this booking
+          const existingBlock = await db
+              .collection("suppliers")
+              .doc(supplierId)
+              .collection("blocked_dates")
+              .where("bookingId", "==", data.bookingId)
+              .get();
+
+          if (existingBlock.empty) {
+            // Create blocked date entry
+            await db
+                .collection("suppliers")
+                .doc(supplierId)
+                .collection("blocked_dates")
+                .add({
+                  date: admin.firestore.Timestamp.fromDate(eventDate),
+                  dateString: dateStr,
+                  reason: `Reserva confirmada: ${booking.eventName || booking.packageName || "Evento"}`,
+                  type: "booking",
+                  bookingId: data.bookingId,
+                  clientId: booking.clientId,
+                  createdAt: now,
+                  createdBy: context.auth.uid,
+                });
+            console.log(`Blocked date ${dateStr} for confirmed booking ${data.bookingId}`);
+          }
+        }
+
+        // 8.6 If rejecting, remove any blocked_dates entry for this booking
         if (data.action === "reject") {
           const blockedDatesQuery = await db
               .collection("suppliers")

@@ -63,13 +63,14 @@ export const onBookingUpdated = functions.firestore
     const statusChanged = before.status !== after.status;
     const paymentStatusChanged = before.paymentStatus !== after.paymentStatus;
     const hasReviewChanged = before.hasReview !== after.hasReview;
+    const paidAmountChanged = before.paidAmount !== after.paidAmount;
 
-    if (!statusChanged && !paymentStatusChanged && !hasReviewChanged) {
+    if (!statusChanged && !paymentStatusChanged && !hasReviewChanged && !paidAmountChanged) {
       console.log(`No relevant changes for booking ${bookingId}, skipping`);
       return;
     }
 
-    console.log(`Booking updated: ${bookingId}, status: ${before.status} -> ${after.status}`);
+    console.log(`Booking updated: ${bookingId}, status: ${before.status} -> ${after.status}, paidAmount: ${before.paidAmount} -> ${after.paidAmount}`);
 
     const clientId = after.clientId as string;
     const supplierId = after.supplierId as string;

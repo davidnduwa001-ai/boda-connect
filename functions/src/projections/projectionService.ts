@@ -216,7 +216,8 @@ function buildClientUIFlags(
 ): ClientBookingUIFlags {
   const paymentStatus = booking.paymentStatus || "pending";
   const paidAmount = booking.paidAmount || 0;
-  const totalPrice = booking.totalPrice || 0;
+  // Use totalAmount (new field) with fallback to totalPrice (legacy)
+  const totalPrice = booking.totalAmount || booking.totalPrice || 0;
   const isUnpaid = paidAmount === 0;
   const isPartiallyPaid = paidAmount > 0 && paidAmount < totalPrice;
 
