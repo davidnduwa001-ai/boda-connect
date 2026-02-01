@@ -114,7 +114,7 @@ class AppConfig {
   // ==================== GOOGLE MAPS ====================
 
   /// Google Maps API Key - Get from: https://console.cloud.google.com/apis/credentials
-  static const String googleMapsApiKey = 'YOUR_GOOGLE_MAPS_API_KEY';
+  static const String googleMapsApiKey = 'AIzaSyAD9JYQXZ8Pm8p5z40fUacWO3rGZL30mLA';
 
   // ==================== ALGOLIA SEARCH ====================
 
