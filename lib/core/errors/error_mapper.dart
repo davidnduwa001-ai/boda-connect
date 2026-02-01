@@ -129,7 +129,10 @@ class ErrorMapper {
           return 'Muitas tentativas de pagamento. Aguarde antes de tentar novamente.';
         }
         if (_isUnavailableError(error)) {
-          return 'Pagamentos temporariamente indisponiveis. Tente novamente mais tarde.';
+          return 'Sistema de pagamentos indisponivel. Entre em contato com o suporte.';
+        }
+        if (_isProviderNotConfiguredError(error)) {
+          return 'Sistema de pagamentos nao configurado. Entre em contato com o suporte.';
         }
         return baseMessage;
 
@@ -173,6 +176,14 @@ class ErrorMapper {
       return error.code == 'already-exists';
     }
     return false;
+  }
+
+  static bool _isProviderNotConfiguredError(Object error) {
+    final errorString = error.toString().toLowerCase();
+    return errorString.contains('não está configurado') ||
+        errorString.contains('not configured') ||
+        errorString.contains('not enabled') ||
+        errorString.contains('not available');
   }
 }
 

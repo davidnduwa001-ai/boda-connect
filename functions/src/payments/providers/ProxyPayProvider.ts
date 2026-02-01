@@ -291,9 +291,21 @@ let opgProviderInstance: ProxyPayOPGProvider | null = null;
 let rpsProviderInstance: ProxyPayRPSProvider | null = null;
 
 /**
+ * Check if ProxyPay is properly configured
+ */
+function isProxyPayConfigured(): boolean {
+  return !!PROXYPAY_CONFIG.apiKey && PROXYPAY_CONFIG.apiKey.length > 0;
+}
+
+/**
  * Get ProxyPay OPG provider instance
+ * @throws Error if ProxyPay is not configured
  */
 export function getProxyPayOPGProvider(): ProxyPayOPGProvider {
+  if (!isProxyPayConfigured()) {
+    logger.error("proxypay_not_configured", "PROXYPAY_API_KEY is not set");
+    throw new Error("ProxyPay não está configurado. Configure PROXYPAY_API_KEY no ambiente.");
+  }
   if (!opgProviderInstance) {
     opgProviderInstance = new ProxyPayOPGProvider();
   }
@@ -302,8 +314,17 @@ export function getProxyPayOPGProvider(): ProxyPayOPGProvider {
 
 /**
  * Get ProxyPay RPS provider instance
+ * @throws Error if ProxyPay is not configured
  */
 export function getProxyPayRPSProvider(): ProxyPayRPSProvider {
+  if (!isProxyPayConfigured()) {
+    logger.error("proxypay_not_configured", "PROXYPAY_API_KEY is not set");
+    throw new Error("ProxyPay não está configurado. Configure PROXYPAY_API_KEY no ambiente.");
+  }
+  if (!PROXYPAY_CONFIG.entityId) {
+    logger.error("proxypay_entity_not_configured", "PROXYPAY_ENTITY_ID is not set");
+    throw new Error("ProxyPay Entity ID não está configurado.");
+  }
   if (!rpsProviderInstance) {
     rpsProviderInstance = new ProxyPayRPSProvider();
   }

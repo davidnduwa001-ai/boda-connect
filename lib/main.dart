@@ -24,24 +24,20 @@ void main() async {
   );
 
   // ==================== APP CHECK ====================
-  // App Check is DISABLED until debug tokens are registered in Firebase Console
-  //
-  // To enable App Check:
-  // 1. Run app and look for debug token in logs: "App Check debug token: XXXX-XXXX-..."
-  // 2. Go to Firebase Console > App Check > Apps > Your App > Manage debug tokens
-  // 3. Add the debug token from step 1
-  // 4. Uncomment the code below
-  //
-  // try {
-  //   await FirebaseAppCheck.instance.activate(
-  //     androidProvider: AndroidProvider.debug,
-  //     appleProvider: AppleProvider.debug,
-  //   );
-  //   Log.success('App Check initialized');
-  // } catch (e) {
-  //   Log.warn('App Check initialization skipped: $e');
-  // }
-  Log.i('App Check disabled - enable after registering debug tokens in Firebase Console');
+  // App Check protects backend resources from abuse
+  // Using debug provider for development - register debug tokens in Firebase Console
+  // for production, use AndroidProvider.playIntegrity and AppleProvider.appAttest
+  try {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.debug,
+      appleProvider: AppleProvider.debug,
+    );
+    Log.success('App Check initialized (debug mode)');
+  } catch (e) {
+    // App Check initialization failed - continue without it
+    // This allows the app to work even if App Check is not set up
+    Log.warn('App Check initialization skipped: $e');
+  }
 
   // ==================== AFRICA NETWORK OPTIMIZATIONS ====================
 
