@@ -81,9 +81,12 @@ class AppConfig {
   //   res.status(200).send('OK');
   // });
 
-  static const String firebaseProjectId = 'boda-connect'; // Replace with your project ID
+  static const String firebaseProjectId = 'boda-connect-49eb9'; // Firebase project ID
   static String get webhookBaseUrl =>
       'https://us-central1-$firebaseProjectId.cloudfunctions.net';
+
+  /// App URL for payment redirects (Stripe checkout)
+  static const String appUrl = 'https://boda-connect-49eb9.web.app';
 
   /// Webhook URL for ProxyPay payment notifications
   /// Deploy this as a Firebase Cloud Function

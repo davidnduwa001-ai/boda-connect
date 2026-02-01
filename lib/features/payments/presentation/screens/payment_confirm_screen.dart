@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/constants/dimensions.dart';
 import '../../../../core/constants/text_styles.dart';
@@ -235,19 +237,36 @@ class _PaymentConfirmScreenState extends ConsumerState<PaymentConfirmScreen> {
     setState(() => _isProcessing = true);
 
     try {
-      // Process payment via provider
+      // Process payment via provider (now uses Stripe)
       final result = await ref.read(paymentProvider.notifier).createPayment(
         bookingId: widget.bookingId,
         amount: widget.amount,
         description: 'Pagamento para reserva #${widget.bookingId.length >= 8 ? widget.bookingId.substring(0, 8) : widget.bookingId}',
-        customerPhone: '', // Will be filled from user profile in real implementation
+        customerPhone: '', // Optional for Stripe
       );
 
       if (!mounted) return;
 
       if (result != null) {
-        // Use query params for reload-safe navigation
-        context.go('${Routes.paymentSuccess}?bookingId=${widget.bookingId}&method=${Uri.encodeComponent(widget.paymentMethod)}&amount=${widget.amount}');
+        // Check if we have a Stripe checkout URL
+        if (result.paymentUrl != null && result.paymentUrl!.isNotEmpty) {
+          // Redirect to Stripe Checkout
+          final uri = Uri.parse(result.paymentUrl!);
+          if (kIsWeb) {
+            // On web, redirect in same window for return URL to work
+            await launchUrl(uri, webOnlyWindowName: '_self');
+          } else {
+            // On mobile, open in external browser
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+            // Navigate to pending screen while waiting for payment completion
+            if (mounted) {
+              context.go('${Routes.paymentSuccess}?bookingId=${widget.bookingId}&method=stripe&amount=${widget.amount}&pending=true');
+            }
+          }
+        } else {
+          // No checkout URL - payment was processed directly
+          context.go('${Routes.paymentSuccess}?bookingId=${widget.bookingId}&method=${Uri.encodeComponent(widget.paymentMethod)}&amount=${widget.amount}');
+        }
       } else {
         final errorMessage = ref.read(paymentProvider).error;
         final encodedError = Uri.encodeComponent(errorMessage ?? 'O pagamento não pôde ser processado. Tente novamente.');

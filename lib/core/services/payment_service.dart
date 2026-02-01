@@ -40,8 +40,8 @@ class PaymentService {
   // The client should NOT calculate fees - use read-only escrow data instead.
   // ======================================================
 
-  /// Create a mobile payment via OPG (Online Payment Gateway)
-  /// Customer receives push notification on Multicaixa Express app
+  /// Create a payment via Stripe (test mode)
+  /// Returns checkout URL for Stripe hosted checkout
   /// Payment is created via Cloud Function for security
   Future<PaymentResult> createPayment({
     required String bookingId,
@@ -59,11 +59,14 @@ class PaymentService {
       final result = await callable.call<Map<String, dynamic>>({
         'bookingId': bookingId,
         'amount': amount,
-        'paymentMethod': 'opg',
+        'paymentMethod': 'stripe', // Using Stripe for testing
         'customerPhone': customerPhone,
         'customerEmail': customerEmail,
         'customerName': customerName,
         'description': description,
+        // Stripe checkout redirect URLs
+        'successUrl': '${AppConfig.appUrl}/payment-success?bookingId=$bookingId',
+        'cancelUrl': '${AppConfig.appUrl}/payment-cancelled?bookingId=$bookingId',
       });
 
       final data = result.data;
@@ -75,7 +78,7 @@ class PaymentService {
       return PaymentResult(
         paymentId: data['paymentId'] as String,
         reference: data['reference'] as String,
-        paymentUrl: data['paymentUrl'] as String?,
+        paymentUrl: data['checkoutUrl'] as String?, // Stripe checkout URL
         status: PaymentStatus.pending,
         amount: amount,
         currency: 'AOA',
@@ -89,9 +92,8 @@ class PaymentService {
     }
   }
 
-  // REMOVED: createStripePayment()
-  // SECURITY: Client cannot select payment provider.
-  // Provider selection is SERVER-SIDE ONLY via configuration.
+  // NOTE: Currently using Stripe for testing.
+  // When ProxyPay API is ready, change 'paymentMethod' to 'opg' for mobile payments.
 
   /// Create a reference payment via RPS (Reference Payment System)
   /// Customer pays at ATM or home banking using Entity + Reference
